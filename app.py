@@ -5,7 +5,7 @@
 - 직원: 출퇴근(/staff, 개인 PIN) · 오픈/마감 체크리스트 · 주문 화면(/kds, 카운터·제조용)
 - 사장님: /admin (비밀번호) — 매출 분석·메뉴·재고/유통기한·레시피 원가·생산일지·발주·직원·적립·예약·리뷰·판매 예측
 파이썬 기본 기능만 사용 (설치할 라이브러리 없음) · 데이터는 data/sandbear.db (SQLite)
-사용: python3 app.py                  실행 (SB_PORT, 기본 8090)
+사용: python3 app.py                  실행 (SB_PORT, 기본 8095)
       python3 app.py --set-owner-pw   사장님 비밀번호 설정/변경
 결제(선택): 환경변수 TOSS_CLIENT_KEY · TOSS_SECRET_KEY 를 넣으면 손님 폰 카드/간편결제 사용, 없으면 '카운터 결제'
 """
@@ -19,7 +19,7 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 STATIC = os.path.join(BASE, "static")
 DATA = os.environ.get("SB_DATA", os.path.join(BASE, "data"))
 DB = os.path.join(DATA, "sandbear.db")
-PORT = int(os.environ.get("SB_PORT", "8090"))
+PORT = int(os.environ.get("SB_PORT", "8095"))
 HOST = os.environ.get("SB_HOST", "0.0.0.0")
 TOSS_CK = os.environ.get("TOSS_CLIENT_KEY", "").strip()
 TOSS_SK = os.environ.get("TOSS_SECRET_KEY", "").strip()

@@ -5,7 +5,7 @@ After=network-online.target
 [Service]
 WorkingDirectory=/root/sandbear-cafe
 ExecStart=/usr/bin/python3 /root/sandbear-cafe/app.py
-Environment=SB_PORT=8090
+Environment=SB_PORT=8095
 Environment=SB_HOST=127.0.0.1
 # 손님 폰 결제를 켤 때만 (토스페이먼츠 가맹 후): 아래 파일에 TOSS_CLIENT_KEY=... TOSS_SECRET_KEY=... 두 줄
 EnvironmentFile=-/root/sandbear-cafe/data/toss.env

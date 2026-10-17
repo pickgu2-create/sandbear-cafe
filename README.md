@@ -37,7 +37,7 @@ sudo systemctl daemon-reload && sudo systemctl enable --now sandbear
 주소 연결 (Caddy, HTTPS 필수 — 알림·결제가 https 에서만 됨): `/etc/caddy/Caddyfile` 에 추가 후 `sudo systemctl reload caddy`
 ```
 sandbear.duckdns.org {
-    reverse_proxy 127.0.0.1:8090
+    reverse_proxy 127.0.0.1:8095
 }
 ```
 (duckdns 에서 `sandbear` 같은 새 주소를 만들어 서버 IP 로 연결)
