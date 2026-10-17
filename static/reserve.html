@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>케이크 · 디저트 예약 · 샌드베어</title>
+<meta name="theme-color" content="#f7f1e8">
+<link rel="icon" href="/icon.svg">
+<link rel="stylesheet" href="/style.css">
+<style>
+.step{display:flex;align-items:center;gap:8px;margin:22px 0 8px;font-size:17px;font-weight:800}
+.step i{font-style:normal;width:26px;height:26px;border-radius:50%;background:var(--brand);color:#fff;font-size:14px;display:flex;align-items:center;justify-content:center}
+.pick{display:flex;gap:12px;align-items:center;padding:12px;background:var(--card);border:2px solid var(--line);border-radius:16px;margin:8px 0}
+.pick.on{border-color:var(--brand);background:#fff8ef}
+.pick .em{width:54px;height:54px;border-radius:14px;background:var(--soft);display:flex;align-items:center;justify-content:center;font-size:28px;flex:none}
+.qty{display:flex;align-items:center;gap:10px}
+.qty button{width:36px;height:36px;padding:0;border-radius:50%;font-size:20px}
+.qty b{min-width:18px;text-align:center}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 6px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chips button{flex:none;background:var(--card);border:1px solid var(--line);font-weight:600;padding:10px 12px;text-align:center;line-height:1.25}
+.chips button small{display:block;font-weight:400;font-size:12px;color:var(--sub)}
+.chips button.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+.chips button.on small{color:#f3e2cc}
+.times{display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:8px}
+.times button{background:var(--card);border:1px solid var(--line);font-weight:600}
+.times button.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+.bar{position:fixed;left:0;right:0;bottom:0;padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 30%);z-index:10}
+.bar button{width:100%;max-width:728px;display:block;margin:0 auto;padding:15px;font-size:16px;border-radius:16px}
+.done{text-align:center;padding:30px 10px}
+.done .big{font-size:60px}
+</style>
+</head>
+<body>
+<header class="hd"><div class="wrap">
+  <a class="logo" href="/" title="메뉴판(홈)으로"><img src="/icon.svg" alt="샌드베어 홈"></a><b style="color:var(--brand)">케이크 · 디저트 예약</b>
+  <span class="grow"></span><a href="/" class="muted">메뉴판</a>
+</div></header>
+<main class="wrap" id="app"><div class="empty">불러오는 중…</div></main>
+<div class="bar" id="bar" hidden><button class="primary" id="go" disabled></button></div>
+<script src="/common.js"></script>
+<script>
+let I, sel = {}, day = '', time = '';
+const WD = '일월화수목금토';
+const kst = (d = new Date()) => new Date(d.getTime() + 9 * 3600e3);
+const ymd = d => d.toISOString().slice(0, 10);
+
+function days() {
+  const out = [], base = kst();
+  for (let k = I.min_days; k <= I.max_days; k++) {
+    const d = new Date(base.getTime() + k * 86400e3), wd = WD[d.getUTCDay()];
+    if (!I.closed.includes(wd)) out.push({v: ymd(d), label: `${d.getUTCMonth() + 1}/${d.getUTCDate()}`, wd, k});
+  }
+  return out;
+}
+function times() {
+  const [oh, om] = I.open.split(':').map(Number), [ch, cm] = I.close.split(':').map(Number), out = [];
+  const nowM = kst().getUTCHours() * 60 + kst().getUTCMinutes(), isToday = day === ymd(kst());
+  for (let m = oh * 60 + om; m <= ch * 60 + cm; m += 30) if (!isToday || m > nowM + 60) out.push(`${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);
+  return out;
+}
+const total = () => I.items.reduce((s, i) => s + (sel[i.id] || 0) * i.price, 0);
+const count = () => Object.values(sel).reduce((a, b) => a + b, 0);
+
+function draw() {
+  const ds = days(); if (!day && ds.length) day = ds[0].v;
+  const ts = times(); if (time && !ts.includes(time)) time = '';
+  $('#app').innerHTML = `
+    <div style="padding-top:14px"><h1 style="margin:0;font-size:22px">미리 예약하고 편하게 픽업하세요 🎂</h1>
+      <div class="muted" style="margin-top:4px">${I.min_days ? `픽업 ${I.min_days}일 전까지 예약 · ` : ''}픽업 ${I.open}~${I.close}${I.closed.length ? ` · ${I.closed.join('·')}요일 휴무` : ''}</div>
+      ${I.notice ? `<div class="card">📢 ${esc(I.notice)}</div>` : ''}</div>
+
+    <div class="step"><i>1</i>메뉴 고르기</div>
+    ${I.items.map(i => `<div class="pick ${sel[i.id] ? 'on' : ''}">
+      <div class="em">${esc(i.emoji || '🍰')}</div>
+      <div class="grow"><b>${esc(i.name)}</b>${i.descr ? `<div class="muted">${esc(i.descr)}</div>` : ''}<div style="color:var(--brand);font-weight:700">${won(i.price)}</div></div>
+      <div class="qty"><button data-id="${i.id}" data-d="-1" ${sel[i.id] ? '' : 'disabled'}>−</button><b>${sel[i.id] || 0}</b><button data-id="${i.id}" data-d="1">+</button></div></div>`).join('')
+      || '<div class="muted">지금 예약 가능한 메뉴가 없어요. 아래에 원하는 걸 적어 주세요.</div>'}
+    <label>그 밖에 원하는 것 (선택)</label><input id="extra" maxlength="100" placeholder="예: 홀케이크 2호, 초 3개" value="${esc($('#extra') ? $('#extra').value : '')}">
+
+    <div class="step"><i>2</i>픽업 날짜</div>
+    <div class="chips" id="days">${ds.map(d => `<button data-v="${d.v}" class="${d.v === day ? 'on' : ''}">${d.k === 0 ? '오늘' : d.k === 1 ? '내일' : d.label}<small>${d.k <= 1 ? d.label + ' ' : ''}${d.wd}</small></button>`).join('')}</div>
+
+    <div class="step"><i>3</i>픽업 시간</div>
+    <div class="times" id="times">${ts.map(t => `<button data-v="${t}" class="${t === time ? 'on' : ''}">${t}</button>`).join('') || '<div class="muted">그날은 가능한 시간이 없어요</div>'}</div>
+
+    <div class="step"><i>4</i>예약하시는 분</div>
+    <div class="row"><div class="grow"><label>이름</label><input id="nm" maxlength="20" autocomplete="name" value="${esc(val('nm', localStorage.getItem('sb_name') || ''))}"></div>
+      <div class="grow"><label>휴대폰 번호</label><input id="ph" inputmode="tel" autocomplete="tel" placeholder="010-0000-0000" value="${esc(val('ph', localStorage.getItem('sb_phone') || ''))}"></div></div>
+    <label>요청사항 (선택)</label><input id="memo" maxlength="200" placeholder="예: 포장 꼼꼼히 부탁드려요" value="${esc(val('memo', ''))}">
+    <div style="height:110px"></div>`;
+  $('#app').querySelectorAll('.qty button').forEach(b => b.onclick = () => { const id = b.dataset.id; sel[id] = Math.max(0, Math.min(50, (sel[id] || 0) + +b.dataset.d)); if (!sel[id]) delete sel[id]; keep(draw); });
+  $('#days').querySelectorAll('button').forEach(b => b.onclick = () => { day = b.dataset.v; keep(draw); });
+  $('#times').querySelectorAll('button').forEach(b => b.onclick = () => { time = b.dataset.v; keep(draw); });
+  ['extra', 'nm', 'ph', 'memo'].forEach(id => $('#' + id).oninput = drawBar);
+  drawBar();
+}
+function val(id, def) { const el = $('#' + id); return el ? el.value : def; }
+function keep(fn) { const y = scrollY; fn(); scrollTo(0, y); }
+function drawBar() {
+  const has = count() || $('#extra').value.trim();
+  const ready = has && day && time && $('#nm').value.trim() && $('#ph').value.replace(/\D/g, '').length >= 10;
+  $('#bar').hidden = false; $('#go').disabled = !ready;
+  $('#go').textContent = !has ? '메뉴를 골라 주세요' : !time ? '픽업 시간을 골라 주세요' : !ready ? '이름·번호를 적어 주세요'
+    : `예약 신청${total() ? ' · ' + won(total()) : ''}`;
+}
+$('#go').onclick = async () => {
+  $('#go').disabled = true;
+  try {
+    const r = await api('/api/reservation', {items: Object.entries(sel).map(([id, qty]) => ({id: +id, qty})), item: $('#extra').value,
+      pickup: `${day}T${time}`, name: $('#nm').value, phone: $('#ph').value, memo: $('#memo').value});
+    try { localStorage.setItem('sb_name', $('#nm').value.trim()); localStorage.setItem('sb_phone', $('#ph').value.trim()); } catch (e) {}
+    const d = new Date(r.pickup.replace(' ', 'T') + ':00+09:00'), k = kst(d);
+    $('#bar').hidden = true; scrollTo(0, 0);
+    $('#app').innerHTML = `<div class="done"><div class="big">🎉</div><h2>예약 신청이 접수됐어요!</h2>
+      <p class="muted">사장님이 확인한 뒤 <b>${esc($('#ph').value)}</b> 로 연락드려요.</p>
+      <div class="card" style="text-align:left"><div><b>📅 픽업</b> ${k.getUTCMonth() + 1}월 ${k.getUTCDate()}일 (${WD[k.getUTCDay()]}) ${r.pickup.slice(11)}</div>
+        <div style="margin-top:6px"><b>🍰 메뉴</b> ${esc(r.item)}</div>${r.amount ? `<div style="margin-top:6px"><b>💰 예상 금액</b> ${won(r.amount)} <span class="muted">(픽업 때 결제)</span></div>` : ''}</div>
+      <a href="/"><button class="primary" style="width:100%">메뉴판으로</button></a></div>`;
+  } catch (e) { toast(e.message, 3500); $('#go').disabled = false; }
+};
+(async () => {
+  try { I = await api('/api/reserve-info'); document.title = `케이크 · 디저트 예약 · ${I.cafe}`; draw(); }
+  catch (e) { $('#app').innerHTML = '<div class="card empty">잠시 후 다시 시도해 주세요</div>'; }
+})();
+</script>
+</body>
+</html>

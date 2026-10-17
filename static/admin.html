@@ -149,7 +149,7 @@ R.menu = async () => {
   return `<h2>메뉴 · 품절</h2><p class="muted">'품절' 스위치를 켜면 손님 메뉴판에 바로 품절로 보여요. 디저트(개수 관리)는 남은 개수가 0이 되면, 음료(레시피 연결)는 재료가 모자라면 <b>자동 품절</b>돼요.</p>
     <button class="primary noprint" id="addm">+ 메뉴 추가</button>
     <div class="card tbl"><table><tr><th>분류</th><th>메뉴</th><th class="r">가격</th><th>남은 개수</th><th>품절</th><th></th></tr>
-    ${D.menu.map(m => `<tr style="${m.active ? '' : 'opacity:.45'}"><td>${esc(m.cat)}</td><td>${esc(m.emoji)} ${esc(m.name)}${m.active ? '' : ' <span class="tag">숨김</span>'}${m.auto_soldout === 'stock' ? ' <span class="tag bad">자동품절·개수0</span>' : m.auto_soldout === 'ingredient' ? ' <span class="tag bad">자동품절·재료부족</span>' : ''}</td>
+    ${D.menu.map(m => `<tr style="${m.active || m.resv ? '' : 'opacity:.45'}"><td>${esc(m.cat)}</td><td>${esc(m.emoji)} ${esc(m.name)}${m.active ? '' : ' <span class="tag">메뉴판 숨김</span>'}${m.resv ? ' <span class="tag ok">예약</span>' : ''}${m.auto_soldout === 'stock' ? ' <span class="tag bad">자동품절·개수0</span>' : m.auto_soldout === 'ingredient' ? ' <span class="tag bad">자동품절·재료부족</span>' : ''}</td>
       <td class="r">${n(m.price)}</td><td>${m.stock === null ? '<span class="muted">레시피</span>' : n(m.stock) + '개'}</td>
       <td><input type="checkbox" data-so="${m.id}" ${m.soldout ? 'checked' : ''} style="width:22px;height:22px"></td><td><button class="sm primary" data-edit="${m.id}">이름·가격·옵션 수정</button></td></tr>`).join('')}</table></div>`;
 };
@@ -165,7 +165,9 @@ function menuForm(m) {
     <label>재고 방식</label><select name="track"><option value="recipe">음료 — 레시피 재료로 관리 (주문 때 재료 차감)</option><option value="count" ${m.stock !== null && m.stock !== undefined ? 'selected' : ''}>디저트 — 남은 개수로 관리 (생산일지에서 추가)</option></select>
     <label>남은 개수 (디저트일 때)</label><input name="stock" type="number" value="${m.stock ?? 0}">
     <div class="row" style="margin-top:10px"><label class="row"><input type="checkbox" name="active" ${m.active === 0 ? '' : 'checked'} style="width:auto"> 메뉴판에 보이기</label>
-    <label class="row"><input type="checkbox" name="soldout" ${m.soldout ? 'checked' : ''} style="width:auto"> 품절</label></div></div>
+    <label class="row"><input type="checkbox" name="soldout" ${m.soldout ? 'checked' : ''} style="width:auto"> 품절</label>
+    <label class="row"><input type="checkbox" name="resv" ${m.resv ? 'checked' : ''} style="width:auto"> 🎂 예약 페이지에 보이기</label></div>
+    <div class="muted">홀케이크처럼 예약으로만 파는 건 '메뉴판에 보이기'는 끄고 '예약 페이지에 보이기'만 켜세요.</div></div>
     <div class="row" style="margin-top:14px">${m.id ? '<button class="danger" id="del">삭제</button>' : ''}<span class="grow"></span><button class="primary" id="sv">저장</button></div>`);
   $('#sv', md).onclick = async () => { try { await post('menu_save', {id: m.id, ...form($('#f', md))}); md.remove(); go('menu'); toast('저장했어요'); } catch (e) { toast(e.message); } };
   if (m.id) $('#del', md).onclick = async () => { if (confirm('삭제할까요? (주문 기록이 있으면 숨김 처리)')) { await post('menu_delete', {id: m.id}); md.remove(); go('menu'); } };
@@ -389,9 +391,9 @@ R.customers = async () => {
 R.reservations = async () => {
   const d = await g('reservations');
   setTimeout(() => document.querySelectorAll('[data-rs]').forEach(s => s.onchange = async () => { await post('reservation_status', {id: +s.dataset.rs, status: s.value}); toast('변경했어요'); }));
-  return `<h2>예약 주문</h2><p class="muted">손님 메뉴판 '더보기'에서 홀케이크 등을 예약하면 여기 들어와요. 확인 후 손님께 연락하고 상태를 바꿔 주세요.</p>
-    <div class="card tbl"><table><tr><th>픽업</th><th>이름</th><th>연락처</th><th>메뉴</th><th class="r">개수</th><th>메모</th><th>상태</th></tr>
-    ${d.rows.map(r => `<tr style="${['완료', '취소'].includes(r.status) ? 'opacity:.5' : ''}"><td><b>${r.pickup.slice(5)}</b></td><td>${esc(r.name)}</td><td><a href="tel:${r.phone}">${r.phone}</a></td><td>${esc(r.item)}</td><td class="r">${r.qty}</td><td class="muted">${esc(r.memo)}</td>
+  return `<h2>예약 주문</h2><p class="muted">손님이 예약 페이지(/reserve, 메뉴판 위 '케이크 · 디저트 예약' 버튼)에서 신청하면 여기 들어와요. 예약 시간·쉬는 요일은 설정에서. 확인 후 손님께 연락하고 상태를 바꿔 주세요.</p>
+    <div class="card tbl"><table><tr><th>픽업</th><th>이름</th><th>연락처</th><th>메뉴</th><th class="r">예상 금액</th><th>메모</th><th>상태</th></tr>
+    ${d.rows.map(r => `<tr style="${['완료', '취소'].includes(r.status) ? 'opacity:.5' : ''}"><td><b>${r.pickup.slice(5)}</b></td><td>${esc(r.name)}</td><td><a href="tel:${r.phone}">${r.phone}</a></td><td>${esc(r.item)}</td><td class="r">${r.amount ? n(r.amount) : '-'}</td><td class="muted">${esc(r.memo)}</td>
       <td><select data-rs="${r.id}" style="width:auto">${['접수', '확정', '제작중', '완료', '취소'].map(s => `<option ${s === r.status ? 'selected' : ''}>${s}</option>`).join('')}</select></td></tr>`).join('')}</table>
     ${d.rows.length ? '' : '<div class="empty">예약이 없어요</div>'}</div>`;
 };
@@ -430,6 +432,9 @@ R.settings = async () => {
   const s = await g('settings');
   setTimeout(() => {
     $('#ssv').onclick = async () => { try { await post('settings', form($('#sf'))); toast('저장했어요'); go('settings'); } catch (e) { toast(e.message); } };
+    $('#rl').textContent = location.origin + '/reserve';
+    $('#rcp').onclick = () => { navigator.clipboard.writeText(location.origin + '/reserve'); toast('복사했어요'); };
+    $('#rsv').onclick = async () => { try { await post('settings', form($('#rf'))); toast('저장했어요'); } catch (e) { toast(e.message); } };
     $('#lall').onclick = async () => { if (confirm('모든 기기(직원 태블릿 포함)의 로그인을 풀까요?')) { await post('logout_all', {}); location.reload(); } };
   });
   return `<h2>설정</h2><div class="card" id="sf">
@@ -440,6 +445,13 @@ R.settings = async () => {
       <div class="grow"><label>유통기한 임박 알림 (일)</label><input name="expiry_days" type="number" value="${esc(s.expiry_days)}"></div></div>
     <label>새 사장님 비밀번호 (바꿀 때만, 6자 이상)</label><input name="new_password" type="password" autocomplete="new-password">
     <button class="primary" id="ssv" style="margin-top:12px">저장</button></div>
+    <div class="card" id="rf"><b>🎂 케이크 · 디저트 예약</b>
+      <p class="muted">손님 예약 페이지: <a href="/reserve" target="_blank" id="rl"></a> <button class="sm" id="rcp">주소 복사</button> — 인스타그램·카톡 프로필에 올려두세요. 예약 메뉴는 '메뉴'에서 '예약 페이지에 보이기'로 골라요.</p>
+      <div class="row wrapx"><div class="grow"><label>픽업 가능 시간</label><input name="resv_hours" value="${esc(s.resv_hours)}" placeholder="11:00-19:00"></div>
+        <div class="grow"><label>며칠 전까지 예약 (0 = 당일 가능)</label><input name="resv_min_days" type="number" min="0" value="${esc(s.resv_min_days)}"></div>
+        <div class="grow"><label>쉬는 요일 (예: 월)</label><input name="resv_closed" value="${esc(s.resv_closed)}" placeholder="예: 월화"></div></div>
+      <label>예약 페이지 공지 (선택)</label><input name="resv_notice" value="${esc(s.resv_notice)}" placeholder="예: 홀케이크는 3일 전까지 예약해 주세요">
+      <button class="primary" id="rsv" style="margin-top:12px">예약 설정 저장</button></div>
     <div class="card"><b>결제</b><p>${s.toss ? '✅ 토스페이먼츠 연결됨 — 손님이 폰에서 카드·간편결제' : '🧾 지금은 <b>카운터 결제</b> 모드예요. 손님 폰 결제를 쓰려면 토스페이먼츠 가맹 후 서버에 키를 넣어야 해요 (README 참고).'}</p></div>
     <div class="card"><b>보안</b><p class="muted">잃어버린 태블릿이 있으면 눌러 주세요.</p><button class="danger" id="lall">모든 기기 로그아웃</button></div>`;
 };

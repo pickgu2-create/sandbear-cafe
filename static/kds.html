@@ -9,10 +9,15 @@
 <style>
 .board{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;padding:12px 16px}
 .ord{background:var(--card);border:2px solid var(--line);border-radius:16px;padding:12px;display:flex;flex-direction:column}
-.ord.new{border-color:var(--warn);animation:blink 1s ease-in-out 6}
+.ord.new{border-color:var(--warn)}
+.ord.alert{border:4px solid #e07b00;animation:flash .8s steps(1) infinite}
+@keyframes flash{0%{background:#ffb84d}50%{background:#fff}}
+.ord.alert h3::before{content:"🔔 새 주문 ";color:#c2453a}
+.newbar{display:none;position:sticky;top:56px;z-index:6;background:#c2453a;color:#fff;font-size:20px;font-weight:800;text-align:center;padding:12px;animation:flash2 .8s steps(1) infinite}
+.newbar.on{display:block}
+@keyframes flash2{0%{background:#c2453a}50%{background:#e07b00}}
 .ord.making{border-color:var(--brand2)}
 .ord.ready{border-color:var(--ok);background:#f2faf4}
-@keyframes blink{50%{background:#fff3dc}}
 .ord h3{margin:0;font-size:20px}
 .ord .it{font-size:17px;padding:4px 0;border-bottom:1px dashed var(--line)}
 .ord .it small{display:block;color:var(--sub);font-size:13px}
@@ -33,6 +38,7 @@
 <div id="login" class="wrap" hidden><div class="card" style="max-width:380px;margin:40px auto;text-align:center">
   <h3>직원 PIN 입력</h3><div id="pad"></div>
   <div class="muted">사장님은 <a href="/admin">사장님 화면</a>에서 로그인하면 바로 열려요</div></div></div>
+<div class="newbar" id="newbar"></div>
 <main id="board" class="board"></main>
 <details class="wrap" style="max-width:none;padding:0 16px 30px"><summary class="muted">오늘 픽업 끝난 주문</summary><div id="done"></div></details>
 <script src="/common.js"></script>
@@ -44,7 +50,11 @@ function ago(t) { const m = Math.floor((Date.now() - new Date(t.replace(' ', 'T'
 function draw() {
   if (!data) return;
   const os = data.orders.filter(o => filter === 'all' || o.status === filter);
-  $('#board').innerHTML = os.length ? os.map(o => `<div class="ord ${o.status}">
+  const alerts = data.orders.filter(o => o.status === 'new' && !o.acked);
+  $('#newbar').classList.toggle('on', alerts.length > 0);
+  $('#newbar').textContent = `🔔 새 주문 ${alerts.length}건 — '결제 확인' 또는 '제조 시작'을 눌러 주세요`;
+  document.title = alerts.length ? `🔔(${alerts.length}) 새 주문!` : '주문 화면 · 샌드베어';
+  $('#board').innerHTML = os.length ? os.map(o => `<div class="ord ${o.status} ${o.status === 'new' && !o.acked ? 'alert' : ''}">
     <div class="row"><h3 class="grow">#${o.id} · ${esc(o.table)}${/^\d+$/.test(o.table) ? '번' : ''}</h3><span class="tag ${o.status === 'ready' ? 'ok' : o.status === 'new' ? 'warn' : ''}">${label[o.status]}</span></div>
     <div class="muted">${ago(o.created)} · ${won(o.total)} · ${o.pay === 'toss' ? '💳 결제완료' : o.paid ? '🧾 결제완료' : '<b style="color:var(--bad)">🧾 미결제</b>'}${o.phone4 ? ' · ☎' + esc(o.phone4) : ''}</div>
     <div style="margin:8px 0">${o.items.map(i => `<div class="it"><b>${esc(i.name)}</b> × ${i.qty}${i.opts ? `<small>${esc(i.opts)}</small>` : ''}</div>`).join('')}</div>
@@ -69,7 +79,7 @@ async function poll() {
     $('#login').hidden = true;
     const fresh = data.orders.filter(o => o.status === 'new' && !seen.has(o.id));
     fresh.forEach(o => seen.add(o.id)); sessionStorage.setItem('kds_seen', JSON.stringify([...seen].slice(-300)));
-    if (fresh.length && !first) { if (sound) beep(4); toast(`🆕 새 주문 ${fresh.length}건`); }
+    if (fresh.length && !first) toast(`🆕 새 주문 ${fresh.length}건`);
     first = false; draw();
   } catch (e) { if (e.status === 401) { $('#login').hidden = false; $('#board').innerHTML = ''; } }
 }
@@ -87,6 +97,8 @@ if (soundPref) {   // 전에 켜 두었으면: 화면 아무 데나 처음 누�
   document.addEventListener('pointerdown', function once(e) { document.removeEventListener('pointerdown', once, true); if (e.target.id !== 'snd') { sound = true; unlockAudio(); drawSnd(); } }, true);
 }
 $('#out').onclick = async () => { await api('/api/staff/logout', {}); location.reload(); };
+// 확인 안 한 새 주문이 있는 동안 4초마다 계속 울림 → 결제 확인·제조 시작 등 버튼을 누르면 멈춤
+setInterval(() => { if (sound && data && data.orders.some(o => o.status === 'new' && !o.acked)) beep(4); }, 4000);
 me(); poll(); setInterval(poll, 3000); setInterval(draw, 30000);
 </script>
 </body>

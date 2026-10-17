@@ -24,7 +24,7 @@ HOST = os.environ.get("SB_HOST", "0.0.0.0")
 TOSS_CK = os.environ.get("TOSS_CLIENT_KEY", "").strip()
 TOSS_SK = os.environ.get("TOSS_SECRET_KEY", "").strip()
 KST = timezone(timedelta(hours=9))
-PAGES = {"/": "menu.html", "/menu": "menu.html", "/kds": "kds.html", "/staff": "staff.html", "/admin": "admin.html"}
+PAGES = {"/": "menu.html", "/menu": "menu.html", "/reserve": "reserve.html", "/kds": "kds.html", "/staff": "staff.html", "/admin": "admin.html"}
 FILES = {"/style.css": ("style.css", "text/css; charset=utf-8"), "/common.js": ("common.js", "text/javascript; charset=utf-8"),
          "/icon.svg": ("icon.svg", "image/svg+xml"),
          "/qrcode.js": ("qrcode.js", "text/javascript; charset=utf-8")}   # QR 생성 (qrcode-generator, MIT)
@@ -63,6 +63,12 @@ LOCK = threading.RLock()
 con = sqlite3.connect(DB, check_same_thread=False)
 con.row_factory = sqlite3.Row
 con.executescript(SCHEMA)
+if "acked" not in [r[1] for r in con.execute("PRAGMA table_info(orders)")]:   # 직원이 새 주문을 확인했는지 (알림 끄기용)
+    con.execute("ALTER TABLE orders ADD COLUMN acked INTEGER DEFAULT 0"); con.execute("UPDATE orders SET acked=1"); con.commit()
+if "resv" not in [r[1] for r in con.execute("PRAGMA table_info(menu)")]:      # 예약 페이지에 보일 메뉴 (처음엔 디저트만)
+    con.execute("ALTER TABLE menu ADD COLUMN resv INTEGER DEFAULT 0"); con.execute("UPDATE menu SET resv=1 WHERE stock IS NOT NULL"); con.commit()
+if "amount" not in [r[1] for r in con.execute("PRAGMA table_info(reservations)")]:   # 예약 예상 금액
+    con.execute("ALTER TABLE reservations ADD COLUMN amount INTEGER DEFAULT 0"); con.commit()
 
 def q(sql, *a):
     with LOCK: return [dict(r) for r in con.execute(sql, a).fetchall()]
@@ -311,15 +317,40 @@ def api_points(h, d):
     if not c: fail(h.ip)   # 번호 마구 넣어보기 방지
     return 200, c or {"points": 0, "visits": 0}
 
+def resv_conf():
+    hours = setting("resv_hours", "11:00-19:00")
+    m = re.fullmatch(r"\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*", hours)
+    try: o, c = f"{int(m.group(1)):02d}:{m.group(2)}", f"{int(m.group(3)):02d}:{m.group(4)}"
+    except Exception: o, c = "11:00", "19:00"
+    return dict(open=o, close=c, min_days=max(0, int(num(setting("resv_min_days", "1"), 1))), max_days=30,
+                closed=[w for w in "월화수목금토일" if w in setting("resv_closed", "")])
+
+def api_reserve_info(h, d):
+    items = [dict(id=m["id"], cat=m["cat"], name=m["name"], price=m["price"], descr=m["descr"], emoji=m["emoji"])
+             for m in q("SELECT * FROM menu WHERE resv=1 ORDER BY sort, id")]
+    return 200, dict(cafe=setting("cafe_name", "샌드베어"), notice=setting("resv_notice"), items=items, **resv_conf())
+
 def api_reservation(h, d):
-    name = str(d.get("name", "")).strip()[:20]; phone = norm_phone(d.get("phone")); item = str(d.get("item", "")).strip()[:60]
-    pickup = str(d.get("pickup", ""))[:16]
-    if not (name and phone and item and re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}", pickup)): return 400, {"error": "이름·연락처·메뉴·픽업 시간을 모두 적어 주세요"}
-    if pickup.replace("T", " ") < ts()[:16]: return 400, {"error": "픽업 시간이 지났어요"}
+    """예약 신청: 메뉴를 골라서(items) + 직접 쓴 요청(item) · 픽업 날짜·시간은 영업시간·쉬는 날·며칠 전 규칙 확인"""
+    name = str(d.get("name", "")).strip()[:20]; phone = norm_phone(d.get("phone")); extra = str(d.get("item", "")).strip()[:100]
+    pickup = str(d.get("pickup", ""))[:16].replace("T", " ")
+    parts, qty, amount = [], 0, 0
+    for it in (d.get("items") or [])[:20]:
+        m = q1("SELECT * FROM menu WHERE id=? AND resv=1", int(it.get("id") or 0)); n = int(it.get("qty") or 0)
+        if m and 1 <= n <= 50: parts.append(f"{m['name']} {n}개"); qty += n; amount += m["price"] * n
+    if extra: parts.append(extra)
+    if not name: return 400, {"error": "이름을 적어 주세요"}
+    if not phone: return 400, {"error": "연락처(휴대폰 번호)를 확인해 주세요"}
+    if not parts: return 400, {"error": "예약할 메뉴를 골라 주세요"}
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", pickup): return 400, {"error": "픽업 날짜와 시간을 골라 주세요"}
+    c = resv_conf(); day = datetime.strptime(pickup[:10], "%Y-%m-%d").date(); gap = (day - now().date()).days
+    if gap < c["min_days"]: return 400, {"error": f"예약은 {c['min_days']}일 전까지 받아요" if c["min_days"] else "픽업 시간이 지났어요"}
+    if gap > c["max_days"] or "월화수목금토일"[day.weekday()] in c["closed"]: return 400, {"error": "그날은 예약을 받지 않아요"}
+    if not c["open"] <= pickup[11:] <= c["close"] or pickup < ts()[:16]: return 400, {"error": f"픽업 시간은 {c['open']}~{c['close']} 사이로 골라 주세요"}
     if len(q("SELECT 1 FROM reservations WHERE phone=? AND created>?", phone, ts(now() - timedelta(days=1)))) >= 5: return 429, {"error": "예약이 너무 많아요 — 매장으로 연락 주세요"}
-    x("INSERT INTO reservations(name,phone,item,qty,pickup,memo,created) VALUES(?,?,?,?,?,?,?)",
-      name, phone, item, max(1, min(50, int(d.get("qty") or 1))), pickup.replace("T", " "), str(d.get("memo", ""))[:200], ts())
-    return 200, {}
+    x("INSERT INTO reservations(name,phone,item,qty,pickup,memo,created,amount) VALUES(?,?,?,?,?,?,?,?)",
+      name, phone, ", ".join(parts)[:300], max(1, qty), pickup, str(d.get("memo", ""))[:200], ts(), amount)
+    return 200, {"item": ", ".join(parts), "amount": amount, "pickup": pickup}
 
 def api_review(h, d):
     o = q1("SELECT * FROM orders WHERE token=?", str(d.get("token", "")))
@@ -363,7 +394,7 @@ def kds_orders():
     since = ts(now() - timedelta(hours=14))
     out = []
     for o in q("SELECT * FROM orders WHERE created>? AND status IN ('new','making','ready') ORDER BY id", since):
-        p = order_public(o); p["id"] = o["id"]; p["memo"] = o["memo"]; p["phone4"] = o["phone"][-4:] if o["phone"] else ""
+        p = order_public(o); p["id"] = o["id"]; p["memo"] = o["memo"]; p["phone4"] = o["phone"][-4:] if o["phone"] else ""; p["acked"] = bool(o["acked"])
         out.append(p)
     done = q("SELECT id, table_no, total, done_at FROM orders WHERE created>? AND status='done' ORDER BY id DESC LIMIT 15", since)
     return {"orders": out, "done": done}
@@ -372,6 +403,7 @@ def api_kds_update(h, d):
     o = q1("SELECT * FROM orders WHERE id=?", int(d.get("id", 0)))
     if not o: return 404, {"error": "주문 없음"}
     a = d.get("action")
+    if a in ("paid", "making", "ready", "done", "cancel", "ack"): x("UPDATE orders SET acked=1 WHERE id=?", o["id"])   # 버튼을 누르면 확인한 것 → 알림 끔
     if a == "paid": x("UPDATE orders SET paid=1 WHERE id=?", o["id"]); give_points(o["id"])
     elif a == "making": x("UPDATE orders SET status='making' WHERE id=?", o["id"])
     elif a == "ready": x("UPDATE orders SET status='ready', ready_at=? WHERE id=?", ts(), o["id"])
@@ -585,7 +617,9 @@ def owner_get(h, d, sec):
         return 200, {"day": day, "rows": rows}
     if sec == "settings":
         return 200, dict(cafe_name=setting("cafe_name"), notice=setting("notice"), points_rate=setting("points_rate"), tables=setting("tables", "10"),
-                         expiry_days=setting("expiry_days", "3"), toss=bool(TOSS_CK and TOSS_SK))
+                         expiry_days=setting("expiry_days", "3"), toss=bool(TOSS_CK and TOSS_SK),
+                         resv_hours=setting("resv_hours", "11:00-19:00"), resv_min_days=setting("resv_min_days", "1"),
+                         resv_closed=setting("resv_closed"), resv_notice=setting("resv_notice"))
     return 404, {"error": "없음"}
 
 def num(v, default=0.0):
@@ -601,10 +635,11 @@ def owner_post(h, d, act):
     if act == "menu_save":
         stock = None if d.get("track") != "count" else int(num(d.get("stock")))
         vals = (str(d.get("cat", "기타")).strip() or "기타", str(d.get("name", "")).strip(), int(num(d.get("price"))), str(d.get("descr", "")),
-                str(d.get("options", "")), str(d.get("emoji", ""))[:4], 1 if d.get("soldout") else 0, stock, 1 if d.get("active", True) else 0, int(num(d.get("sort"))))
+                str(d.get("options", "")), str(d.get("emoji", ""))[:4], 1 if d.get("soldout") else 0, stock, 1 if d.get("active", True) else 0, int(num(d.get("sort"))),
+                1 if d.get("resv") else 0)
         if not vals[1]: return 400, {"error": "메뉴 이름을 넣어 주세요"}
-        if i: x("UPDATE menu SET cat=?,name=?,price=?,descr=?,options=?,emoji=?,soldout=?,stock=?,active=?,sort=? WHERE id=?", *vals, i)
-        else: x("INSERT INTO menu(cat,name,price,descr,options,emoji,soldout,stock,active,sort) VALUES(?,?,?,?,?,?,?,?,?,?)", *vals)
+        if i: x("UPDATE menu SET cat=?,name=?,price=?,descr=?,options=?,emoji=?,soldout=?,stock=?,active=?,sort=?,resv=? WHERE id=?", *vals, i)
+        else: x("INSERT INTO menu(cat,name,price,descr,options,emoji,soldout,stock,active,sort,resv) VALUES(?,?,?,?,?,?,?,?,?,?,?)", *vals)
         return owner_get(h, d, "menu")
     if act == "menu_soldout":
         x("UPDATE menu SET soldout=? WHERE id=?", 1 if d.get("soldout") else 0, i); return owner_get(h, d, "menu")
@@ -701,7 +736,7 @@ def owner_post(h, d, act):
                 x("INSERT INTO point_log(phone,delta,memo,at) VALUES(?,?,?,?)", o["phone"], -pts, f"주문 #{i} 취소", ts())
         return owner_get(h, {"day": (o or {}).get("created", "")[:10]}, "orders")
     if act == "settings":
-        for k in ("cafe_name", "notice", "points_rate", "tables", "expiry_days"):
+        for k in ("cafe_name", "notice", "points_rate", "tables", "expiry_days", "resv_hours", "resv_min_days", "resv_closed", "resv_notice"):
             if k in d: set_setting(k, str(d[k])[:300])
         if d.get("new_password"):
             if len(d["new_password"]) < 6: return 400, {"error": "비밀번호는 6자 이상"}
@@ -753,6 +788,7 @@ class H(BaseHTTPRequestHandler):
             m = re.fullmatch(r"/api/order/([\w-]{8,40})", p)
             if m: return self.send(*self.wrap(api_order_get(self, d, m.group(1))))
             if p == "/api/points": return self.send(*self.wrap(api_points(self, d)))
+            if p == "/api/reserve-info": return self.send(*self.wrap(api_reserve_info(self, d)))
             role, sid = self.role()
             if p == "/api/me": return self.send(200, {"role": role, "name": (q1("SELECT name FROM staff WHERE id=?", sid) or {}).get("name") if role == "staff" else ("사장님" if role else None)})
             if p == "/api/kds/orders":
