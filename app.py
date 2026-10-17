@@ -322,8 +322,16 @@ def resv_conf():
     m = re.fullmatch(r"\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*", hours)
     try: o, c = f"{int(m.group(1)):02d}:{m.group(2)}", f"{int(m.group(3)):02d}:{m.group(4)}"
     except Exception: o, c = "11:00", "19:00"
-    return dict(open=o, close=c, min_days=max(0, int(num(setting("resv_min_days", "1"), 1))), max_days=30,
-                closed=[w for w in "월화수목금토일" if w in setting("resv_closed", "")])
+    dates = lambda k: sorted(set(re.findall(r"\d{4}-\d{2}-\d{2}", setting(k))))
+    return dict(open=o, close=c, min_days=max(0, int(num(setting("resv_min_days", "1"), 1))), max_days=60,
+                closed=[w for w in "월화수목금토일" if w in setting("resv_closed", "화")],
+                open_dates=dates("open_dates"), off_dates=dates("off_dates"))
+
+def is_open_day(day, c):
+    """영업일: 쉬는 요일이면 '이날은 영업'으로 고른 날만 · 그 외엔 '임시 휴무'로 고른 날 빼고"""
+    s = day.isoformat()
+    if s in c["off_dates"]: return False
+    return "월화수목금토일"[day.weekday()] not in c["closed"] or s in c["open_dates"]
 
 def api_reserve_info(h, d):
     items = [dict(id=m["id"], cat=m["cat"], name=m["name"], price=m["price"], descr=m["descr"], emoji=m["emoji"])
@@ -345,7 +353,7 @@ def api_reservation(h, d):
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", pickup): return 400, {"error": "픽업 날짜와 시간을 골라 주세요"}
     c = resv_conf(); day = datetime.strptime(pickup[:10], "%Y-%m-%d").date(); gap = (day - now().date()).days
     if gap < c["min_days"]: return 400, {"error": f"예약은 {c['min_days']}일 전까지 받아요" if c["min_days"] else "픽업 시간이 지났어요"}
-    if gap > c["max_days"] or "월화수목금토일"[day.weekday()] in c["closed"]: return 400, {"error": "그날은 예약을 받지 않아요"}
+    if gap > c["max_days"] or not is_open_day(day, c): return 400, {"error": "그날은 쉬는 날이에요 — 다른 날을 골라 주세요"}
     if not c["open"] <= pickup[11:] <= c["close"] or pickup < ts()[:16]: return 400, {"error": f"픽업 시간은 {c['open']}~{c['close']} 사이로 골라 주세요"}
     if len(q("SELECT 1 FROM reservations WHERE phone=? AND created>?", phone, ts(now() - timedelta(days=1)))) >= 5: return 429, {"error": "예약이 너무 많아요 — 매장으로 연락 주세요"}
     x("INSERT INTO reservations(name,phone,item,qty,pickup,memo,created,amount) VALUES(?,?,?,?,?,?,?,?)",
@@ -619,7 +627,7 @@ def owner_get(h, d, sec):
         return 200, dict(cafe_name=setting("cafe_name"), notice=setting("notice"), points_rate=setting("points_rate"), tables=setting("tables", "10"),
                          expiry_days=setting("expiry_days", "3"), toss=bool(TOSS_CK and TOSS_SK),
                          resv_hours=setting("resv_hours", "11:00-19:00"), resv_min_days=setting("resv_min_days", "1"),
-                         resv_closed=setting("resv_closed"), resv_notice=setting("resv_notice"))
+                         resv_closed=setting("resv_closed", "화"), resv_notice=setting("resv_notice"), **{"cal": resv_conf()})
     return 404, {"error": "없음"}
 
 def num(v, default=0.0):
@@ -735,6 +743,15 @@ def owner_post(h, d, act):
                 x("UPDATE customers SET points=MAX(0, points-?), spent=spent-?, visits=MAX(0, visits-1) WHERE phone=?", pts, o["total"], o["phone"])
                 x("INSERT INTO point_log(phone,delta,memo,at) VALUES(?,?,?,?)", o["phone"], -pts, f"주문 #{i} 취소", ts())
         return owner_get(h, {"day": (o or {}).get("created", "")[:10]}, "orders")
+    if act == "day_toggle":   # 캘린더에서 날짜 누르기: 쉬는 요일 → 이날만 영업 / 영업일 → 임시 휴무
+        dt = str(d.get("date", ""))
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", dt): return 400, {"error": "날짜 오류"}
+        c = resv_conf(); weekly_off = "월화수목금토일"[date.fromisoformat(dt).weekday()] in c["closed"]
+        k = "open_dates" if weekly_off else "off_dates"
+        cur = set(c[k]); cur.symmetric_difference_update({dt})
+        keep = {x_ for x_ in cur if x_ >= (now() - timedelta(days=60)).strftime("%Y-%m-%d")}   # 지난 날짜는 정리
+        set_setting(k, ",".join(sorted(keep)))
+        return 200, {"cal": resv_conf()}
     if act == "settings":
         for k in ("cafe_name", "notice", "points_rate", "tables", "expiry_days", "resv_hours", "resv_min_days", "resv_closed", "resv_notice"):
             if k in d: set_setting(k, str(d[k])[:300])

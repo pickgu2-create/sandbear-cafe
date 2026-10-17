@@ -46,3 +46,20 @@ td.r,th.r{text-align:right}
 .pin-dots i{width:14px;height:14px;border-radius:50%;border:2px solid var(--brand);display:block}
 .pin-dots i.on{background:var(--brand)}
 .empty{text-align:center;color:var(--sub);padding:24px 0}
+/* 달력 */
+.cal{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:10px}
+.cal-hd{display:flex;align-items:center;justify-content:space-between;padding:2px 4px 8px}
+.cal-hd b{font-size:16px}
+.cal-hd button{width:38px;height:38px;padding:0;font-size:22px;border-radius:50%;background:var(--soft)}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-grid i{font-style:normal;text-align:center;font-size:12px;color:var(--sub);padding:4px 0}
+.cal-grid .sun{color:var(--bad)} .cal-grid .sat{color:#3c6fb6}
+.cal-grid button{aspect-ratio:1/1;min-height:42px;padding:2px;border-radius:12px;background:#fff;border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:600;line-height:1.1}
+.cal-grid button small{font-size:9.5px;font-weight:600;margin-top:2px;white-space:nowrap}
+.cal-grid button:disabled{background:transparent;border-color:transparent;color:#cbbfae;opacity:1}
+.cal-grid button:disabled.sun{color:#e4b5b0}
+.cal-grid button.today{box-shadow:inset 0 0 0 2px var(--brand2)}
+.cal-grid button.sel{background:var(--brand);border-color:var(--brand);color:#fff}
+.cal-grid button.closed{background:#efe9e1;color:#a89886}
+.cal-grid button.off{background:#fbe6e3;color:var(--bad)}
+.cal-grid button.special{background:#e2f2e7;color:var(--ok)}

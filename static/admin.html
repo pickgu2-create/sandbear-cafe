@@ -434,7 +434,17 @@ R.settings = async () => {
     $('#ssv').onclick = async () => { try { await post('settings', form($('#sf'))); toast('저장했어요'); go('settings'); } catch (e) { toast(e.message); } };
     $('#rl').textContent = location.origin + '/reserve';
     $('#rcp').onclick = () => { navigator.clipboard.writeText(location.origin + '/reserve'); toast('복사했어요'); };
-    $('#rsv').onclick = async () => { try { await post('settings', form($('#rf'))); toast('저장했어요'); } catch (e) { toast(e.message); } };
+    $('#rsv').onclick = async () => { try { await post('settings', form($('#rf'))); toast('저장했어요'); go('settings'); } catch (e) { toast(e.message); } };
+    let cal = s.cal, ym = today().slice(0, 7);
+    const WDS = '일월화수목금토';
+    const drawCal = () => calendar($('#acal'), {ym, min: today(), selected: '',
+      cell: v => { const weeklyOff = cal.closed.includes(WDS[new Date(v + 'T00:00:00Z').getUTCDay()]);
+        if (cal.off_dates.includes(v)) return {cls: 'off', note: '임시휴무'};
+        if (weeklyOff) return cal.open_dates.includes(v) ? {cls: 'special', note: '영업'} : {cls: 'closed', note: '정기휴무'};
+        return {}; },
+      onPick: async v => { try { cal = (await post('day_toggle', {date: v})).cal; drawCal(); } catch (e) { toast(e.message); } },
+      onMonth: m => { ym = m; drawCal(); }});
+    drawCal();
     $('#lall').onclick = async () => { if (confirm('모든 기기(직원 태블릿 포함)의 로그인을 풀까요?')) { await post('logout_all', {}); location.reload(); } };
   });
   return `<h2>설정</h2><div class="card" id="sf">
@@ -449,9 +459,13 @@ R.settings = async () => {
       <p class="muted">손님 예약 페이지: <a href="/reserve" target="_blank" id="rl"></a> <button class="sm" id="rcp">주소 복사</button> — 인스타그램·카톡 프로필에 올려두세요. 예약 메뉴는 '메뉴'에서 '예약 페이지에 보이기'로 골라요.</p>
       <div class="row wrapx"><div class="grow"><label>픽업 가능 시간</label><input name="resv_hours" value="${esc(s.resv_hours)}" placeholder="11:00-19:00"></div>
         <div class="grow"><label>며칠 전까지 예약 (0 = 당일 가능)</label><input name="resv_min_days" type="number" min="0" value="${esc(s.resv_min_days)}"></div>
-        <div class="grow"><label>쉬는 요일 (예: 월)</label><input name="resv_closed" value="${esc(s.resv_closed)}" placeholder="예: 월화"></div></div>
+        <div class="grow"><label>매주 쉬는 요일 (예: 화)</label><input name="resv_closed" value="${esc(s.resv_closed)}" placeholder="예: 화"></div></div>
       <label>예약 페이지 공지 (선택)</label><input name="resv_notice" value="${esc(s.resv_notice)}" placeholder="예: 홀케이크는 3일 전까지 예약해 주세요">
-      <button class="primary" id="rsv" style="margin-top:12px">예약 설정 저장</button></div>
+      <button class="primary" id="rsv" style="margin-top:12px">예약 설정 저장</button>
+      <h3 style="margin:18px 0 4px">📅 영업일 달력</h3>
+      <p class="muted" style="margin-top:0">날짜를 누르면 바뀌어요. <b>정기휴무 날(공휴일 등)을 누르면 → 그날만 영업</b> · 영업하는 날을 누르면 → 임시 휴무. 손님 예약 달력에 바로 반영돼요.</p>
+      <div id="acal" style="max-width:420px"></div>
+      <div class="row wrapx muted" style="margin-top:8px;gap:12px;font-size:12px"><span><span class="tag" style="background:#efe9e1;color:#a89886">정기휴무</span></span><span><span class="tag ok">특별 영업</span></span><span><span class="tag bad">임시 휴무</span></span></div></div>
     <div class="card"><b>결제</b><p>${s.toss ? '✅ 토스페이먼츠 연결됨 — 손님이 폰에서 카드·간편결제' : '🧾 지금은 <b>카운터 결제</b> 모드예요. 손님 폰 결제를 쓰려면 토스페이먼츠 가맹 후 서버에 키를 넣어야 해요 (README 참고).'}</p></div>
     <div class="card"><b>보안</b><p class="muted">잃어버린 태블릿이 있으면 눌러 주세요.</p><button class="danger" id="lall">모든 기기 로그아웃</button></div>`;
 };

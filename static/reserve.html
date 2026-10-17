@@ -16,12 +16,6 @@
 .qty{display:flex;align-items:center;gap:10px}
 .qty button{width:36px;height:36px;padding:0;border-radius:50%;font-size:20px}
 .qty b{min-width:18px;text-align:center}
-.chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 6px;scrollbar-width:none}
-.chips::-webkit-scrollbar{display:none}
-.chips button{flex:none;background:var(--card);border:1px solid var(--line);font-weight:600;padding:10px 12px;text-align:center;line-height:1.25}
-.chips button small{display:block;font-weight:400;font-size:12px;color:var(--sub)}
-.chips button.on{background:var(--brand);color:#fff;border-color:var(--brand)}
-.chips button.on small{color:#f3e2cc}
 .times{display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:8px}
 .times button{background:var(--card);border:1px solid var(--line);font-weight:600}
 .times button.on{background:var(--brand);color:#fff;border-color:var(--brand)}
@@ -45,14 +39,13 @@ const WD = '일월화수목금토';
 const kst = (d = new Date()) => new Date(d.getTime() + 9 * 3600e3);
 const ymd = d => d.toISOString().slice(0, 10);
 
-function days() {
-  const out = [], base = kst();
-  for (let k = I.min_days; k <= I.max_days; k++) {
-    const d = new Date(base.getTime() + k * 86400e3), wd = WD[d.getUTCDay()];
-    if (!I.closed.includes(wd)) out.push({v: ymd(d), label: `${d.getUTCMonth() + 1}/${d.getUTCDate()}`, wd, k});
-  }
-  return out;
+const addDays = k => ymd(new Date(kst().getTime() + k * 86400e3));
+function openDay(v) {   // 쉬는 요일이면 '이날만 영업'인 날만 · 그 외엔 임시 휴무 빼고
+  if (I.off_dates.includes(v)) return false;
+  return !I.closed.includes(WD[new Date(v + 'T00:00:00Z').getUTCDay()]) || I.open_dates.includes(v);
 }
+function firstOpen() { for (let k = I.min_days; k <= I.max_days; k++) if (openDay(addDays(k))) return addDays(k); return ''; }
+let cm = '';
 function times() {
   const [oh, om] = I.open.split(':').map(Number), [ch, cm] = I.close.split(':').map(Number), out = [];
   const nowM = kst().getUTCHours() * 60 + kst().getUTCMinutes(), isToday = day === ymd(kst());
@@ -63,11 +56,12 @@ const total = () => I.items.reduce((s, i) => s + (sel[i.id] || 0) * i.price, 0);
 const count = () => Object.values(sel).reduce((a, b) => a + b, 0);
 
 function draw() {
-  const ds = days(); if (!day && ds.length) day = ds[0].v;
+  if (!day) day = firstOpen();
+  if (!cm) cm = (day || addDays(0)).slice(0, 7);
   const ts = times(); if (time && !ts.includes(time)) time = '';
   $('#app').innerHTML = `
     <div style="padding-top:14px"><h1 style="margin:0;font-size:22px">미리 예약하고 편하게 픽업하세요 🎂</h1>
-      <div class="muted" style="margin-top:4px">${I.min_days ? `픽업 ${I.min_days}일 전까지 예약 · ` : ''}픽업 ${I.open}~${I.close}${I.closed.length ? ` · ${I.closed.join('·')}요일 휴무` : ''}</div>
+      <div class="muted" style="margin-top:4px">${I.min_days ? `픽업 ${I.min_days}일 전까지 예약 · ` : ''}픽업 ${I.open}~${I.close}${I.closed.length ? ` · 매주 ${I.closed.join('·')}요일 휴무` : ''}</div>
       ${I.notice ? `<div class="card">📢 ${esc(I.notice)}</div>` : ''}</div>
 
     <div class="step"><i>1</i>메뉴 고르기</div>
@@ -79,7 +73,8 @@ function draw() {
     <label>그 밖에 원하는 것 (선택)</label><input id="extra" maxlength="100" placeholder="예: 홀케이크 2호, 초 3개" value="${esc($('#extra') ? $('#extra').value : '')}">
 
     <div class="step"><i>2</i>픽업 날짜</div>
-    <div class="chips" id="days">${ds.map(d => `<button data-v="${d.v}" class="${d.v === day ? 'on' : ''}">${d.k === 0 ? '오늘' : d.k === 1 ? '내일' : d.label}<small>${d.k <= 1 ? d.label + ' ' : ''}${d.wd}</small></button>`).join('')}</div>
+    <div id="cal"></div>
+    <div class="muted" style="margin-top:6px">${day ? `선택: <b style="color:var(--ink)">${+day.slice(5, 7)}월 ${+day.slice(8)}일 (${WD[new Date(day + 'T00:00:00Z').getUTCDay()]})</b> · ` : ''}회색 날은 휴무예요</div>
 
     <div class="step"><i>3</i>픽업 시간</div>
     <div class="times" id="times">${ts.map(t => `<button data-v="${t}" class="${t === time ? 'on' : ''}">${t}</button>`).join('') || '<div class="muted">그날은 가능한 시간이 없어요</div>'}</div>
@@ -90,7 +85,9 @@ function draw() {
     <label>요청사항 (선택)</label><input id="memo" maxlength="200" placeholder="예: 포장 꼼꼼히 부탁드려요" value="${esc(val('memo', ''))}">
     <div style="height:110px"></div>`;
   $('#app').querySelectorAll('.qty button').forEach(b => b.onclick = () => { const id = b.dataset.id; sel[id] = Math.max(0, Math.min(50, (sel[id] || 0) + +b.dataset.d)); if (!sel[id]) delete sel[id]; keep(draw); });
-  $('#days').querySelectorAll('button').forEach(b => b.onclick = () => { day = b.dataset.v; keep(draw); });
+  calendar($('#cal'), {ym: cm, min: addDays(I.min_days), max: addDays(I.max_days), selected: day,
+    cell: v => openDay(v) ? {} : {off: true, note: '휴무'},
+    onPick: v => { day = v; keep(draw); }, onMonth: ym => { cm = ym; keep(draw); }});
   $('#times').querySelectorAll('button').forEach(b => b.onclick = () => { time = b.dataset.v; keep(draw); });
   ['extra', 'nm', 'ph', 'memo'].forEach(id => $('#' + id).oninput = drawBar);
   drawBar();

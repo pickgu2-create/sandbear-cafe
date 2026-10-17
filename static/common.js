@@ -48,3 +48,23 @@ function pinPad(el, len, onDone) {
   });
   return { clear() { v = ''; draw(); } };
 }
+// 달력 (월 단위) — o: {ym:'2026-10', min, max:'YYYY-MM-DD', selected, cell(d) → {off, cls, note}, onPick(d), onMonth(ym)}
+function calendar(el, o) {
+  const [y, m] = o.ym.split('-').map(Number), first = new Date(Date.UTC(y, m - 1, 1)), days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const pad = n => String(n).padStart(2, '0'), ymOf = d => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}`;
+  const prev = ymOf(new Date(Date.UTC(y, m - 2, 1))), next = ymOf(new Date(Date.UTC(y, m, 1)));
+  const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+  let cells = '';
+  for (let i = 0; i < first.getUTCDay(); i++) cells += '<span></span>';
+  for (let d = 1; d <= days; d++) {
+    const v = `${y}-${pad(m)}-${pad(d)}`, wd = (first.getUTCDay() + d - 1) % 7;
+    const c = o.cell ? o.cell(v) : {}, out = (o.min && v < o.min) || (o.max && v > o.max);
+    cells += `<button type="button" data-d="${v}" class="${c.cls || ''} ${v === o.selected ? 'sel' : ''} ${v === today ? 'today' : ''} ${wd === 0 ? 'sun' : wd === 6 ? 'sat' : ''}" ${out || c.off ? 'disabled' : ''}>
+      <b>${d}</b>${c.note ? `<small>${esc(c.note)}</small>` : ''}</button>`;
+  }
+  el.innerHTML = `<div class="cal"><div class="cal-hd"><button type="button" data-m="${prev}" ${o.min && prev < o.min.slice(0, 7) ? 'disabled' : ''}>‹</button>
+    <b>${y}년 ${m}월</b><button type="button" data-m="${next}" ${o.max && next > o.max.slice(0, 7) ? 'disabled' : ''}>›</button></div>
+    <div class="cal-grid">${'일월화수목금토'.split('').map((w, i) => `<i class="${i === 0 ? 'sun' : i === 6 ? 'sat' : ''}">${w}</i>`).join('')}${cells}</div></div>`;
+  el.querySelectorAll('[data-m]').forEach(b => b.onclick = () => o.onMonth(b.dataset.m));
+  el.querySelectorAll('[data-d]').forEach(b => b.onclick = () => o.onPick(b.dataset.d));
+}
