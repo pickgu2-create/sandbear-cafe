@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>사장님 · 샌드베어</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/icon.svg">
+<link rel="stylesheet" href="/style.css">
+<style>
+.layout{display:flex;max-width:1200px;margin:0 auto}
+nav.side{width:190px;flex:none;padding:12px 8px;position:sticky;top:56px;height:calc(100vh - 56px);overflow:auto}
+nav.side button{display:block;width:100%;text-align:left;background:none;padding:9px 12px;font-weight:500;border-radius:10px}
+nav.side button.on{background:var(--brand);color:#fff;font-weight:700}
+main.body{flex:1;min-width:0;padding:4px 16px 40px}
+@media(max-width:820px){
+  .layout{display:block} nav.side{width:auto;height:auto;position:sticky;top:56px;z-index:4;background:var(--bg);display:flex;overflow-x:auto;padding:8px 16px;gap:4px;border-bottom:1px solid var(--line)}
+  nav.side button{white-space:nowrap;width:auto}
+}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px}
+.kpi b{display:block;font-size:22px;margin-top:2px}
+.bars .r{display:grid;grid-template-columns:70px 1fr 90px;gap:8px;align-items:center;font-size:13px;padding:3px 0}
+.bars .r .t{color:var(--sub)} .bars .r .v{text-align:right}
+.al{padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:700px){.grid2{grid-template-columns:1fr}}
+.lot{font-size:13px;padding:3px 0}
+.lot.expired{color:var(--bad);font-weight:700} .lot.soon{color:#9a6205;font-weight:700}
+.qrs{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+.qr{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px;text-align:center;break-inside:avoid}
+.qr .box{display:flex;justify-content:center;margin:8px 0}
+h2{font-size:19px;margin:16px 0 6px}
+@media print{header,nav.side,.noprint{display:none!important} body{background:#fff} .qr{border:1px dashed #999}}
+</style>
+</head>
+<body>
+<header class="hd"><div class="wrap" style="max-width:1200px">
+  <a class="logo" href="/admin"><img src="/icon.svg" alt="">사장님 화면</a><span class="grow"></span>
+  <a href="/kds" target="_blank" class="muted">주문 화면</a>
+  <a href="/" target="_blank" class="muted">메뉴판</a>
+  <button class="sm ghost" id="logout" hidden>로그아웃</button>
+</div></header>
+<div id="login" class="wrap" hidden><div class="card" style="max-width:380px;margin:50px auto">
+  <h3 style="margin-top:0">🔒 사장님 비밀번호</h3>
+  <form id="lf"><input type="password" id="pw" autocomplete="current-password" placeholder="비밀번호"><button class="primary" style="width:100%;margin-top:10px">들어가기</button></form>
+</div></div>
+<div class="layout" id="main" hidden>
+  <nav class="side" id="nav"></nav>
+  <main class="body" id="view"></main>
+</div>
+<script src="/common.js"></script>
+<script>
+const TABS = [
+  ['dashboard', '📊 매출 분석'], ['orders', '🧾 주문 내역'], ['menu', '☕ 메뉴 · 품절'], ['ingredients', '🧈 재료 · 재고'],
+  ['recipes', '🧮 레시피 원가'], ['production', '🥐 생산일지'], ['purchase', '🚚 발주 목록'], ['attendance', '⏰ 출퇴근'],
+  ['staff', '👩‍🍳 직원'], ['checklist', '✅ 체크리스트'], ['customers', '🎁 고객 적립'], ['reservations', '🎂 예약 주문'],
+  ['reviews', '⭐ 리뷰'], ['forecast', '🔮 판매 예측'], ['qr', '🔳 테이블 QR'], ['settings', '⚙️ 설정'],
+];
+let tab = location.hash.slice(1) || 'dashboard', D = {};
+const today = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+const n = v => (+v || 0).toLocaleString('ko-KR');
+const g = (sec, q = '') => api(`/api/admin/${sec}${q}`);
+const post = (act, body) => api(`/api/admin/${act}`, body);
+const form = el => Object.fromEntries([...el.querySelectorAll('[name]')].map(i => [i.name, i.type === 'checkbox' ? i.checked : i.value]));
+
+function bars(rows, key, val, fmt = won, max) {
+  max = max || Math.max(1, ...rows.map(r => r[val] || 0));
+  return `<div class="bars">${rows.map(r => `<div class="r"><span class="t">${esc(r[key])}</span><div><div class="bar" style="width:${Math.max(1, (r[val] || 0) / max * 100)}%"></div></div><span class="v">${fmt(r[val])}</span></div>`).join('') || '<div class="muted">아직 데이터가 없어요</div>'}</div>`;
+}
+
+const R = {};   // 탭별 화면
+R.dashboard = async () => {
+  const d = await g('dashboard');
+  const diff = d.yesterday.amt ? Math.round((d.today.amt / d.yesterday.amt - 1) * 100) : null;
+  const wd = '일월화수목금토';
+  return `<h2>오늘</h2><div class="kpis">
+    <div class="kpi"><span class="muted">오늘 매출</span><b>${won(d.today.amt)}</b><span class="muted">${d.today.n}건 ${diff === null ? '' : `· 어제보다 ${diff >= 0 ? '+' : ''}${diff}%`}</span></div>
+    <div class="kpi"><span class="muted">이번 달</span><b>${won(d.month.amt)}</b><span class="muted">${d.month.n}건</span></div>
+    <div class="kpi"><span class="muted">객단가 (오늘)</span><b>${won(d.today.n ? d.today.amt / d.today.n : 0)}</b></div>
+    <div class="kpi"><span class="muted">새 예약</span><b>${d.pending_res}건</b><a href="#reservations">보기 →</a></div></div>
+    ${d.alerts.length ? `<div class="card"><b>⚠️ 확인할 것</b>${d.alerts.map(a => `<div class="al">${{low: '📉', expired: '⛔', soon: '⏳', soldout: '🚫'}[a.kind]} ${esc(a.text)}</div>`).join('')}</div>` : ''}
+    ${d.unpaid.length ? `<div class="card"><b>🧾 카운터 미결제 주문</b>${d.unpaid.map(o => `<div class="al">#${o.id} · ${esc(o.table_no)} · ${won(o.total)} · ${o.created.slice(5, 16)}</div>`).join('')}<div class="muted">주문 화면에서 '결제 확인'을 눌러 주세요</div></div>` : ''}
+    <div class="grid2">
+      <div class="card"><b>일별 매출 (최근 30일)</b>${bars(d.daily.slice().reverse().map(r => ({...r, k: r.k.slice(5)})), 'k', 'amt')}</div>
+      <div class="card"><b>월별 매출</b>${bars(d.monthly.slice().reverse(), 'k', 'amt')}</div>
+      <div class="card"><b>인기 메뉴 TOP 15</b> <span class="muted">${d.frm} ~ ${d.to}</span>${bars(d.popular, 'name', 'qty', v => n(v) + '개')}</div>
+      <div class="card"><b>시간대별 매출</b>${bars(d.hourly.map(r => ({...r, k: r.k + '시'})), 'k', 'amt')}
+        <b style="display:block;margin-top:14px">요일별 하루 평균</b>${bars(d.weekday.sort((a, b) => a.k - b.k).map(r => ({k: wd[r.k], amt: r.amt / r.days})), 'k', 'amt')}</div>
+    </div>`;
+};
+
+R.orders = async (day = today()) => {
+  const d = await g('orders', '?day=' + day);
+  const ok = d.rows.filter(o => !['canceled', 'pending_payment'].includes(o.status));
+  setTimeout(() => {
+    $('#od').onchange = async e => { $('#view').innerHTML = await R.orders(e.target.value); bind(); };
+    document.querySelectorAll('[data-cancel]').forEach(b => b.onclick = async () => {
+      if (!confirm('이 주문을 취소할까요? (재고·포인트 되돌림. 카드 결제는 토스페이먼츠에서 따로 환불)')) return;
+      await post('order_cancel', {id: +b.dataset.cancel}); $('#view').innerHTML = await R.orders(day); bind();
+    });
+  });
+  return `<h2>주문 내역</h2><div class="row noprint"><input type="date" id="od" value="${day}" style="max-width:200px"><span class="muted">${ok.length}건 · ${won(ok.reduce((s, o) => s + o.total, 0))}</span></div>
+    <div class="card tbl"><table><tr><th>#</th><th>시각</th><th>테이블</th><th>메뉴</th><th class="r">금액</th><th>결제</th><th>상태</th><th></th></tr>
+    ${d.rows.map(o => `<tr><td>${o.id}</td><td>${o.created.slice(11, 16)}</td><td>${esc(o.table_no)}</td><td>${o.items.map(i => `${esc(i.name)}×${i.qty}${i.opts ? ` <span class="muted">(${esc(i.opts)})</span>` : ''}`).join('<br>')}${o.memo ? `<div class="muted">💬 ${esc(o.memo)}</div>` : ''}</td>
+      <td class="r">${n(o.total)}</td><td>${o.pay === 'toss' ? '카드' : '카운터'}${o.paid ? '' : ' <span class="tag bad">미결제</span>'}</td>
+      <td>${{pending_payment: '결제 전', new: '접수', making: '제조중', ready: '완료', done: '픽업', canceled: '<span class="tag bad">취소</span>'}[o.status]}</td>
+      <td>${o.status !== 'canceled' && o.status !== 'pending_payment' ? `<button class="sm danger" data-cancel="${o.id}">취소</button>` : ''}</td></tr>`).join('')}</table>
+    ${d.rows.length ? '' : '<div class="empty">주문이 없어요</div>'}</div>`;
+};
+
+R.menu = async () => {
+  D.menu = (await g('menu')).rows;
+  setTimeout(() => {
+    document.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => menuForm(D.menu.find(m => m.id == b.dataset.edit)));
+    document.querySelectorAll('[data-so]').forEach(b => b.onchange = async () => { await post('menu_soldout', {id: +b.dataset.so, soldout: b.checked}); toast(b.checked ? '품절 처리' : '판매 재개'); });
+    $('#addm').onclick = () => menuForm({});
+  });
+  return `<h2>메뉴 · 품절</h2><p class="muted">'품절' 스위치를 켜면 손님 메뉴판에 바로 품절로 보여요. 디저트(개수 관리)는 남은 개수가 0이 되면, 음료(레시피 연결)는 재료가 모자라면 <b>자동 품절</b>돼요.</p>
+    <button class="primary noprint" id="addm">+ 메뉴 추가</button>
+    <div class="card tbl"><table><tr><th>분류</th><th>메뉴</th><th class="r">가격</th><th>남은 개수</th><th>품절</th><th></th></tr>
+    ${D.menu.map(m => `<tr style="${m.active ? '' : 'opacity:.45'}"><td>${esc(m.cat)}</td><td>${esc(m.emoji)} ${esc(m.name)}${m.active ? '' : ' <span class="tag">숨김</span>'}${m.auto_soldout === 'stock' ? ' <span class="tag bad">자동품절·개수0</span>' : m.auto_soldout === 'ingredient' ? ' <span class="tag bad">자동품절·재료부족</span>' : ''}</td>
+      <td class="r">${n(m.price)}</td><td>${m.stock === null ? '<span class="muted">레시피</span>' : n(m.stock) + '개'}</td>
+      <td><input type="checkbox" data-so="${m.id}" ${m.soldout ? 'checked' : ''} style="width:22px;height:22px"></td><td><button class="sm" data-edit="${m.id}">수정</button></td></tr>`).join('')}</table></div>`;
+};
+function menuForm(m) {
+  const md = modal(`<h3 style="margin-top:0">${m.id ? '메뉴 수정' : '메뉴 추가'}</h3><div id="f">
+    <div class="row"><div class="grow"><label>분류</label><input name="cat" value="${esc(m.cat || '커피')}" list="cats"></div><div style="width:80px"><label>이모지</label><input name="emoji" value="${esc(m.emoji || '')}"></div></div>
+    <datalist id="cats">${[...new Set(D.menu.map(x => x.cat))].map(c => `<option>${esc(c)}`).join('')}</datalist>
+    <label>메뉴 이름</label><input name="name" value="${esc(m.name || '')}">
+    <div class="row"><div class="grow"><label>가격 (원)</label><input name="price" type="number" value="${m.price || ''}"></div><div class="grow"><label>정렬 순서</label><input name="sort" type="number" value="${m.sort || 0}"></div></div>
+    <label>설명</label><input name="descr" value="${esc(m.descr || '')}">
+    <label>옵션 — 한 줄에 하나 · <b>이름*:</b> 꼭 하나 고르기 · <b>이름:</b> 골라도 되고 안 골라도 됨 · 추가금은 <b>+500</b></label>
+    <textarea name="options" placeholder="온도*: HOT, ICE&#10;샷 추가: 1샷+500, 2샷+1000">${esc(m.options || '')}</textarea>
+    <label>재고 방식</label><select name="track"><option value="recipe">음료 — 레시피 재료로 관리 (주문 때 재료 차감)</option><option value="count" ${m.stock !== null && m.stock !== undefined ? 'selected' : ''}>디저트 — 남은 개수로 관리 (생산일지에서 추가)</option></select>
+    <label>남은 개수 (디저트일 때)</label><input name="stock" type="number" value="${m.stock ?? 0}">
+    <div class="row" style="margin-top:10px"><label class="row"><input type="checkbox" name="active" ${m.active === 0 ? '' : 'checked'} style="width:auto"> 메뉴판에 보이기</label>
+    <label class="row"><input type="checkbox" name="soldout" ${m.soldout ? 'checked' : ''} style="width:auto"> 품절</label></div></div>
+    <div class="row" style="margin-top:14px">${m.id ? '<button class="danger" id="del">삭제</button>' : ''}<span class="grow"></span><button class="primary" id="sv">저장</button></div>`);
+  $('#sv', md).onclick = async () => { try { await post('menu_save', {id: m.id, ...form($('#f', md))}); md.remove(); go('menu'); toast('저장했어요'); } catch (e) { toast(e.message); } };
+  if (m.id) $('#del', md).onclick = async () => { if (confirm('삭제할까요? (주문 기록이 있으면 숨김 처리)')) { await post('menu_delete', {id: m.id}); md.remove(); go('menu'); } };
+}
+
+R.ingredients = async () => {
+  const d = await g('ingredients'); D.ing = d.rows;
+  setTimeout(() => {
+    $('#addi').onclick = () => ingForm({});
+    document.querySelectorAll('[data-ie]').forEach(b => b.onclick = () => ingForm(D.ing.find(i => i.id == b.dataset.ie)));
+    document.querySelectorAll('[data-in]').forEach(b => b.onclick = () => lotForm(D.ing.find(i => i.id == b.dataset.in)));
+    document.querySelectorAll('[data-lot]').forEach(b => b.onclick = () => lotEdit(+b.dataset.lot));
+    $('#isr').oninput = e => document.querySelectorAll('#itbl tr[data-n]').forEach(tr => tr.hidden = !tr.dataset.n.includes(e.target.value));
+  });
+  return `<h2>재료 · 재고 · 유통기한</h2>
+    <p class="muted">재료를 등록하고, 들어올 때마다 <b>입고</b>(수량·유통기한·금액)를 넣어요. 재고 조사 때는 유통기한 줄을 눌러 실제 남은 수량으로 고치면 돼요. 사용은 유통기한 빠른 것부터 자동 차감. 유통기한 ${esc(d.expiry_days)}일 이내는 노랑, 지난 건 빨강.</p>
+    <div class="row noprint"><button class="primary" id="addi">+ 재료 등록</button><input id="isr" placeholder="재료 검색" style="max-width:220px"></div>
+    <div class="card tbl"><table id="itbl"><tr><th>재료</th><th class="r">현재 재고</th><th class="r">최소</th><th>유통기한별 수량 (눌러서 수정)</th><th class="r">단위 원가</th><th></th></tr>
+    ${D.ing.map(i => `<tr data-n="${esc(i.name)}"><td><b>${esc(i.name)}</b>${i.low ? ' <span class="tag bad">부족</span>' : ''}${i.supplier ? `<div class="muted">${esc(i.supplier)}</div>` : ''}</td>
+      <td class="r"><b>${n(i.qty)}</b>${esc(i.unit)}</td><td class="r">${n(i.min_qty)}</td>
+      <td>${i.lots.map(l => `<div class="lot ${l.state}" data-lot="${l.id}" style="cursor:pointer">${n(l.qty)}${esc(i.unit)} · ${l.expiry ? '~' + l.expiry : '기한 없음'}${l.state === 'expired' ? ' ⛔지남' : l.state === 'soon' ? ' ⏳임박' : ''}</div>`).join('') || '<span class="muted">재고 없음</span>'}</td>
+      <td class="r">${i.unit_cost ? n(Math.round(i.unit_cost * 100) / 100) + '원/' + esc(i.unit) : '<span class="muted">-</span>'}</td>
+      <td style="white-space:nowrap"><button class="sm ok" data-in="${i.id}">입고</button> <button class="sm" data-ie="${i.id}">수정</button></td></tr>`).join('')}</table>
+    ${D.ing.length ? '' : '<div class="empty">재료를 등록해 주세요 (예: 버터 · g · 최소 1000)</div>'}</div>`;
+};
+function ingForm(i) {
+  const md = modal(`<h3 style="margin-top:0">${i.id ? '재료 수정' : '재료 등록'}</h3><div id="f">
+    <label>재료 이름</label><input name="name" value="${esc(i.name || '')}" placeholder="예: 무염버터">
+    <div class="row"><div class="grow"><label>단위</label><input name="unit" value="${esc(i.unit || 'g')}" list="units"></div>
+    <div class="grow"><label>최소 재고 (이하면 발주 목록)</label><input name="min_qty" type="number" step="any" value="${i.min_qty || ''}"></div></div>
+    <datalist id="units"><option>g<option>ml<option>개<option>kg<option>L<option>팩<option>봉</datalist>
+    <label>단위당 원가 (원) — 입고 때 금액을 넣으면 자동 계산</label><input name="unit_cost" type="number" step="any" value="${i.unit_cost || ''}" placeholder="예: 버터 1g 당 15">
+    ${i.id ? '' : `<div class="row"><div class="grow"><label>지금 있는 수량 (선택)</label><input name="qty" type="number" step="any"></div><div class="grow"><label>유통기한</label><input name="expiry" type="date"></div></div>`}
+    <label>거래처</label><input name="supplier" value="${esc(i.supplier || '')}" placeholder="예: 베이킹몰 / 010-...">
+    <label>메모</label><input name="memo" value="${esc(i.memo || '')}"></div>
+    <div class="row" style="margin-top:14px">${i.id ? '<button class="danger" id="del">삭제</button>' : ''}<span class="grow"></span><button class="primary" id="sv">저장</button></div>`);
+  $('#sv', md).onclick = async () => { try { await post('ing_save', {id: i.id, ...form($('#f', md))}); md.remove(); go('ingredients'); } catch (e) { toast(e.message); } };
+  if (i.id) $('#del', md).onclick = async () => { if (confirm(`${i.name} 을(를) 삭제할까요? (레시피에서도 빠져요)`)) { await post('ing_delete', {id: i.id}); md.remove(); go('ingredients'); } };
+}
+function lotForm(i) {
+  const md = modal(`<h3 style="margin-top:0">${esc(i.name)} 입고</h3><div id="f">
+    <div class="row"><div class="grow"><label>수량 (${esc(i.unit)})</label><input name="qty" type="number" step="any" autofocus></div><div class="grow"><label>유통기한</label><input name="expiry" type="date"></div></div>
+    <label>산 금액 (원, 선택 — 넣으면 단위 원가 자동 갱신)</label><input name="price" type="number">
+    <label>메모</label><input name="memo"></div><button class="primary" id="sv" style="width:100%;margin-top:14px">입고 저장</button>`);
+  $('#sv', md).onclick = async () => { try { await post('lot_add', {ing_id: i.id, ...form($('#f', md))}); md.remove(); go('ingredients'); toast('입고했어요'); } catch (e) { toast(e.message); } };
+}
+function lotEdit(id) {
+  let lot, ing; D.ing.forEach(i => i.lots.forEach(l => { if (l.id === id) { lot = l; ing = i; } }));
+  const md = modal(`<h3 style="margin-top:0">${esc(ing.name)} — 재고 조사</h3><div id="f">
+    <div class="row"><div class="grow"><label>실제 남은 수량 (${esc(ing.unit)})</label><input name="qty" type="number" step="any" value="${lot.qty}"></div><div class="grow"><label>유통기한</label><input name="expiry" type="date" value="${lot.expiry || ''}"></div></div>
+    <div class="muted">입고 ${esc(lot.received || '')} ${lot.price ? '· ' + won(lot.price) : ''} ${esc(lot.memo || '')}</div></div>
+    <div class="row" style="margin-top:14px"><button class="danger" id="del">폐기 · 삭제</button><span class="grow"></span><button class="primary" id="sv">저장</button></div>`);
+  $('#sv', md).onclick = async () => { await post('lot_update', {id, ...form($('#f', md))}); md.remove(); go('ingredients'); };
+  $('#del', md).onclick = async () => { if (confirm('이 묶음을 삭제할까요?')) { await post('lot_delete', {id}); md.remove(); go('ingredients'); } };
+}
+
+R.recipes = async () => {
+  const d = await g('recipes'); D.rec = d;
+  setTimeout(() => document.querySelectorAll('[data-rc]').forEach(b => b.onclick = () => recipeForm(D.rec.rows.find(r => r.menu_id == b.dataset.rc))));
+  return `<h2>레시피 원가</h2><p class="muted">메뉴 1개(1잔)에 들어가는 재료 양을 넣으면 실제 제조원가·원가율·마진이 계산돼요. 재료 단가는 '재료 · 재고'의 입고 금액으로 자동 갱신.
+    음료는 주문될 때, 디저트는 생산일지에 기록할 때 이 양만큼 재료가 차감돼요. <b>디저트는 한 판 기준이 아니라 1개 기준</b>으로 넣어 주세요.</p>
+    <div class="card tbl"><table><tr><th>메뉴</th><th>재료</th><th class="r">판매가</th><th class="r">원가</th><th class="r">원가율</th><th class="r">마진</th><th></th></tr>
+    ${d.rows.map(r => `<tr><td><b>${esc(r.name)}</b></td><td class="muted">${r.lines.map(l => `${esc(l.name)} ${n(l.amount)}${esc(l.unit)}`).join(', ') || '-'}</td>
+      <td class="r">${n(r.price)}</td><td class="r">${n(r.cost)}</td>
+      <td class="r"><span class="tag ${r.ratio > 40 ? 'bad' : r.ratio > 30 ? 'warn' : 'ok'}">${r.lines.length ? r.ratio + '%' : '-'}</span></td><td class="r">${r.lines.length ? n(r.margin) : '-'}</td>
+      <td><button class="sm" data-rc="${r.menu_id}">레시피</button></td></tr>`).join('')}</table></div>`;
+};
+function recipeForm(r) {
+  let lines = r.lines.map(l => ({ing_id: l.ing_id, amount: l.amount}));
+  const ings = D.rec.ings;
+  const md = modal(`<h3 style="margin-top:0">${esc(r.name)} — 1개 레시피</h3><div id="ls"></div>
+    <button class="sm" id="add" style="margin-top:8px">+ 재료 추가</button>
+    <div class="row" style="margin-top:12px"><b class="grow" id="sum"></b><button class="primary" id="sv">저장</button></div>
+    ${ings.length ? '' : '<p class="muted">먼저 \'재료 · 재고\'에서 재료를 등록해 주세요.</p>'}`);
+  const draw = () => {
+    $('#ls', md).innerHTML = lines.map((l, k) => `<div class="row" style="margin:6px 0"><select data-k="${k}" class="grow">${ings.map(i => `<option value="${i.id}" ${i.id == l.ing_id ? 'selected' : ''}>${esc(i.name)} (${esc(i.unit)})</option>`).join('')}</select>
+      <input data-a="${k}" type="number" step="any" value="${l.amount || ''}" placeholder="양" style="width:90px"><button class="sm danger" data-x="${k}">✕</button></div>`).join('');
+    $('#ls', md).querySelectorAll('select').forEach(s => s.onchange = () => { lines[s.dataset.k].ing_id = +s.value; sum(); });
+    $('#ls', md).querySelectorAll('input').forEach(s => s.oninput = () => { lines[s.dataset.a].amount = +s.value; sum(); });
+    $('#ls', md).querySelectorAll('[data-x]').forEach(s => s.onclick = () => { lines.splice(s.dataset.x, 1); draw(); });
+    sum();
+  };
+  const sum = () => { const c = lines.reduce((s, l) => s + (l.amount || 0) * ((ings.find(i => i.id == l.ing_id) || {}).unit_cost || 0), 0);
+    $('#sum', md).textContent = `원가 ${won(c)} · 원가율 ${r.price ? (c / r.price * 100).toFixed(1) : 0}%`; };
+  $('#add', md).onclick = () => { if (ings.length) { lines.push({ing_id: ings[0].id, amount: 0}); draw(); } };
+  $('#sv', md).onclick = async () => { await post('recipe_save', {menu_id: r.menu_id, lines}); md.remove(); go('recipes'); toast('저장했어요'); };
+  draw();
+}
+
+R.production = async (day = today()) => {
+  const d = await g('production', '?day=' + day);
+  setTimeout(() => {
+    $('#pd').onchange = async e => { $('#view').innerHTML = await R.production(e.target.value); bind(); };
+    $('#psv').onclick = async () => { try { await post('production_save', {day, ...form($('#pf'))}); $('#view').innerHTML = await R.production(day); bind(); toast('기록했어요'); } catch (e) { toast(e.message); } };
+    document.querySelectorAll('[data-pdel]').forEach(b => b.onclick = async () => { if (confirm('기록을 지울까요? (남은 개수·재료 되돌림)')) { await post('production_delete', {id: +b.dataset.pdel, day}); $('#view').innerHTML = await R.production(day); bind(); } });
+  });
+  return `<h2>베이킹 생산일지</h2><p class="muted">구운 개수를 넣으면 메뉴 '남은 개수'가 늘고 레시피 재료가 차감돼요. 마감 때 남은 걸 버리면 폐기에 넣어 주세요. 판매량은 주문에서 자동 계산.</p>
+    <div class="row noprint"><input type="date" id="pd" value="${day}" style="max-width:200px"></div>
+    <div class="card noprint" id="pf"><div class="row wrapx"><div class="grow" style="min-width:160px"><label>메뉴</label><select name="menu_id">${d.menus.map(m => `<option value="${m.id}">${esc(m.name)}${m.stock !== null ? ` (남은 ${m.stock})` : ''}</option>`).join('')}</select></div>
+      <div style="width:90px"><label>만든 개수</label><input name="made" type="number" min="0"></div><div style="width:90px"><label>폐기</label><input name="wasted" type="number" min="0"></div>
+      <div class="grow" style="min-width:120px"><label>메모</label><input name="memo"></div><div><label>&nbsp;</label><button class="primary" id="psv">기록</button></div></div></div>
+    <div class="card tbl"><b>${day} 요약</b><table><tr><th>메뉴</th><th class="r">생산</th><th class="r">판매</th><th class="r">폐기</th><th class="r">폐기율</th></tr>
+      ${d.summary.map(s => `<tr><td>${esc(s.name)}</td><td class="r">${s.made}</td><td class="r">${s.sold}</td><td class="r">${s.wasted}</td><td class="r">${s.made ? Math.round(s.wasted / s.made * 100) + '%' : '-'}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">기록 없음</td></tr>'}</table></div>
+    <div class="card tbl"><b>기록</b><table>${d.rows.map(r => `<tr><td>${esc(r.name)}</td><td>생산 ${r.made}</td><td>폐기 ${r.wasted}</td><td class="muted">${esc(r.memo)}</td><td><button class="sm danger" data-pdel="${r.id}">지움</button></td></tr>`).join('') || '<tr><td class="muted">없음</td></tr>'}</table></div>
+    <div class="card"><b>최근 30일 생산 · 폐기</b>${bars(d.hist.map(h => ({k: h.day.slice(5), v: h.made, w: h.wasted})), 'k', 'v', v => n(v) + '개')}</div>`;
+};
+
+R.purchase = async () => {
+  const d = await g('purchase');
+  const text = d.rows.map(r => `${r.name} ${r.need}${r.unit}`).join('\n');
+  setTimeout(() => { if ($('#cp')) $('#cp').onclick = () => { navigator.clipboard.writeText(`[샌드베어 발주]\n${text}`); toast('복사했어요 — 거래처 문자·카톡에 붙여넣기'); }; });
+  return `<h2>발주 목록 (자동)</h2><p class="muted">재고가 '최소 재고' 이하이거나 유통기한이 지난 재료가 자동으로 올라와요. 추천 수량 = 최소 재고의 2배까지 채우는 양.</p>
+    <div class="card tbl"><table><tr><th>재료</th><th class="r">쓸 수 있는 재고</th><th class="r">최소</th><th class="r">추천 발주</th><th class="r">예상 금액</th><th>거래처</th></tr>
+    ${d.rows.map(r => `<tr><td><b>${esc(r.name)}</b></td><td class="r">${n(r.qty)}${esc(r.unit)}</td><td class="r">${n(r.min_qty)}</td><td class="r"><b>${n(r.need)}${esc(r.unit)}</b></td><td class="r">${r.cost ? n(r.cost) : '-'}</td><td>${esc(r.supplier)}</td></tr>`).join('')}</table>
+    ${d.rows.length ? `<div class="row" style="margin-top:10px"><span class="grow muted">합계 약 ${won(d.rows.reduce((s, r) => s + r.cost, 0))}</span><button class="primary" id="cp">📋 발주 문자 복사</button></div>` : '<div class="empty">부족한 재료가 없어요 👍</div>'}</div>`;
+};
+
+R.attendance = async (month = today().slice(0, 7)) => {
+  const [d, st] = await Promise.all([g('attendance', '?month=' + month), g('staff')]); D.staff = st.rows; D.att = d.rows;
+  setTimeout(() => {
+    $('#am').onchange = async e => { $('#view').innerHTML = await R.attendance(e.target.value); bind(); };
+    $('#aadd').onclick = () => attForm({}, month);
+    document.querySelectorAll('[data-att]').forEach(b => b.onclick = () => attForm(D.att.find(a => a.id == b.dataset.att), month));
+  });
+  const hm = m => `${Math.floor(m / 60)}시간 ${m % 60}분`;
+  return `<h2>출퇴근 관리</h2><p class="muted">직원은 매장 태블릿의 <b>/staff</b> 화면에서 본인 PIN 으로 출근·퇴근을 찍어요. 빠뜨린 기록은 여기서 고치면 돼요. 예상 급여 = 근무시간 × 시급 (주휴수당·세금 제외).</p>
+    ${d.working.length ? `<div class="card">🟢 지금 근무 중: ${d.working.map(w => `<b>${esc(w.name)}</b> (${w.clock_in.slice(11, 16)}~)`).join(', ')}</div>` : ''}
+    <div class="row noprint"><input type="month" id="am" value="${month}" style="max-width:200px"><button class="primary" id="aadd">+ 기록 추가</button></div>
+    <div class="card tbl"><b>${month} 합계</b><table><tr><th>직원</th><th class="r">근무일</th><th class="r">근무시간</th><th class="r">예상 급여</th></tr>
+    ${d.summary.map(s => `<tr><td>${esc(s.name)}</td><td class="r">${s.days}일</td><td class="r">${hm(s.mins)}</td><td class="r">${n(s.pay)}원</td></tr>`).join('') || '<tr><td colspan="4" class="muted">기록 없음</td></tr>'}</table></div>
+    <div class="card tbl"><table><tr><th>날짜</th><th>직원</th><th>출근</th><th>퇴근</th><th class="r">근무</th><th></th></tr>
+    ${d.rows.map(a => `<tr><td>${a.clock_in.slice(5, 10)}</td><td>${esc(a.name)}</td><td>${a.clock_in.slice(11, 16)}</td><td>${a.clock_out ? a.clock_out.slice(11, 16) + (a.clock_out.slice(0, 10) !== a.clock_in.slice(0, 10) ? ' (+1)' : '') : '<span class="tag ok">근무중</span>'}</td><td class="r">${a.clock_out ? hm(a.mins) : ''}</td><td><button class="sm" data-att="${a.id}">수정</button></td></tr>`).join('')}</table></div>`;
+};
+function attForm(a, month) {
+  const md = modal(`<h3 style="margin-top:0">${a.id ? '출퇴근 수정' : '출퇴근 기록 추가'}</h3><div id="f">
+    <label>직원</label><select name="staff_id">${D.staff.map(s => `<option value="${s.id}" ${s.id == a.staff_id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
+    <label>출근</label><input name="clock_in" type="datetime-local" value="${(a.clock_in || '').slice(0, 16).replace(' ', 'T')}">
+    <label>퇴근 (비우면 근무중)</label><input name="clock_out" type="datetime-local" value="${(a.clock_out || '').slice(0, 16).replace(' ', 'T')}">
+    <label>메모</label><input name="memo" value="${esc(a.memo || '')}"></div>
+    <div class="row" style="margin-top:14px">${a.id ? '<button class="danger" id="del">삭제</button>' : ''}<span class="grow"></span><button class="primary" id="sv">저장</button></div>`);
+  $('#sv', md).onclick = async () => { try { await post('attendance_save', {id: a.id, ...form($('#f', md))}); md.remove(); go('attendance'); } catch (e) { toast(e.message); } };
+  if (a.id) $('#del', md).onclick = async () => { if (confirm('삭제할까요?')) { await post('attendance_delete', {id: a.id, month}); md.remove(); go('attendance'); } };
+}
+
+R.staff = async () => {
+  const d = await g('staff'); D.staff = d.rows;
+  setTimeout(() => {
+    $('#sadd').onclick = () => staffForm({});
+    document.querySelectorAll('[data-st]').forEach(b => b.onclick = () => staffForm(D.staff.find(s => s.id == b.dataset.st)));
+  });
+  return `<h2>직원</h2><p class="muted">직원마다 숫자 PIN(4~6자리)을 정해 주세요. PIN 은 암호화해서 저장돼서 사장님도 다시 볼 수 없어요 — 잊으면 새로 정해 주세요. PIN 으로 출퇴근·체크리스트·주문 화면을 써요.</p>
+    <button class="primary" id="sadd">+ 직원 추가</button>
+    <div class="card tbl"><table><tr><th>이름</th><th class="r">시급</th><th>상태</th><th></th></tr>
+    ${d.rows.map(s => `<tr style="${s.active ? '' : 'opacity:.45'}"><td>${esc(s.name)}</td><td class="r">${n(s.wage)}원</td><td>${s.active ? '근무' : '퇴사'}</td><td><button class="sm" data-st="${s.id}">수정</button></td></tr>`).join('') || '<tr><td class="muted">직원을 추가해 주세요</td></tr>'}</table></div>`;
+};
+function staffForm(s) {
+  const md = modal(`<h3 style="margin-top:0">${s.id ? '직원 수정' : '직원 추가'}</h3><div id="f">
+    <label>이름</label><input name="name" value="${esc(s.name || '')}">
+    <label>시급 (원)</label><input name="wage" type="number" value="${s.wage || 10320}">
+    <label>PIN (숫자 4~6자리) ${s.id ? '— 바꿀 때만 입력' : ''}</label><input name="pin" inputmode="numeric" maxlength="6" autocomplete="off">
+    ${s.id ? `<label class="row"><input type="checkbox" name="active" ${s.active ? 'checked' : ''} style="width:auto"> 근무 중 (끄면 퇴사 처리 · PIN 사용 불가)</label>` : ''}</div>
+    <button class="primary" id="sv" style="width:100%;margin-top:14px">저장</button>`);
+  $('#sv', md).onclick = async () => { try { await post('staff_save', {id: s.id, active: true, ...form($('#f', md))}); md.remove(); go('staff'); } catch (e) { toast(e.message); } };
+}
+
+R.checklist = async (day = today()) => {
+  const d = await g('checklist', '?day=' + day);
+  setTimeout(() => {
+    $('#cd').onchange = async e => { $('#view').innerHTML = await R.checklist(e.target.value); bind(); };
+    document.querySelectorAll('[data-cadd]').forEach(b => b.onclick = async () => {
+      const t = prompt((b.dataset.cadd === 'open' ? '오픈' : '마감') + ' 업무 추가'); if (t) { await post('checklist_save', {kind: b.dataset.cadd, text: t}); go('checklist'); }
+    });
+    document.querySelectorAll('[data-cdel]').forEach(b => b.onclick = async () => { if (confirm('이 항목을 뺄까요?')) { await post('checklist_delete', {id: +b.dataset.cdel}); go('checklist'); } });
+  });
+  const sec = (k, t) => { const it = d.items.filter(i => i.kind === k);
+    return `<div class="card"><div class="row"><b class="grow">${t} (${it.filter(i => i.done).length}/${it.length})</b><button class="sm noprint" data-cadd="${k}">+ 추가</button></div>
+      ${it.map(i => `<div class="row al"><span>${i.done ? '✅' : '⬜'}</span><span class="grow">${esc(i.text)}</span><span class="muted">${i.done ? esc(i.by) + ' ' + i.at : ''}</span><button class="sm ghost noprint" data-cdel="${i.id}">✕</button></div>`).join('')}</div>`; };
+  return `<h2>오픈 · 마감 체크리스트</h2><p class="muted">직원은 /staff → '체크리스트'에서 PIN 을 넣고 체크해요. 누가 몇 시에 했는지 남아요.</p>
+    <input type="date" id="cd" value="${day}" style="max-width:200px"><div class="grid2">${sec('open', '☀️ 오픈')}${sec('close', '🌙 마감')}</div>`;
+};
+
+R.customers = async () => {
+  const d = await g('customers'); D.cus = d.rows;
+  setTimeout(() => {
+    document.querySelectorAll('[data-pt]').forEach(b => b.onclick = async () => {
+      const v = prompt(`${b.dataset.pt} — 사용할 포인트는 -숫자, 적립은 숫자 (예: -3000)`); if (!v) return;
+      try { await post('points', {phone: b.dataset.pt, delta: +v}); go('customers'); toast('반영했어요'); } catch (e) { toast(e.message); }
+    });
+    $('#csr').oninput = e => document.querySelectorAll('#ctbl tr[data-p]').forEach(tr => tr.hidden = !tr.dataset.p.includes(e.target.value.replace(/\D/g, '')));
+  });
+  return `<h2>고객 적립</h2><p class="muted">손님이 주문할 때 휴대폰 번호를 넣으면 결제 금액의 <b>${esc(d.rate)}%</b> 가 적립돼요 (적립률은 설정에서). 쿠폰처럼 쓰려면 손님이 포인트를 보여줄 때 여기서 '사용'으로 차감하면 돼요.</p>
+    <input id="csr" placeholder="번호 뒷자리 검색" inputmode="numeric" style="max-width:220px">
+    <div class="card tbl"><table id="ctbl"><tr><th>번호</th><th class="r">포인트</th><th class="r">방문</th><th class="r">누적 결제</th><th>마지막 방문</th><th></th></tr>
+    ${d.rows.map(c => `<tr data-p="${c.phone}"><td>${c.phone.replace(/(\d{3})(\d{3,4})(\d{4})/, '$1-$2-$3')}</td><td class="r"><b>${n(c.points)}</b></td><td class="r">${c.visits}</td><td class="r">${n(c.spent)}</td><td>${(c.last || '').slice(0, 10)}</td><td><button class="sm" data-pt="${c.phone}">사용/적립</button></td></tr>`).join('')}</table>
+    ${d.rows.length ? '' : '<div class="empty">아직 적립 고객이 없어요</div>'}</div>`;
+};
+
+R.reservations = async () => {
+  const d = await g('reservations');
+  setTimeout(() => document.querySelectorAll('[data-rs]').forEach(s => s.onchange = async () => { await post('reservation_status', {id: +s.dataset.rs, status: s.value}); toast('변경했어요'); }));
+  return `<h2>예약 주문</h2><p class="muted">손님 메뉴판 '더보기'에서 홀케이크 등을 예약하면 여기 들어와요. 확인 후 손님께 연락하고 상태를 바꿔 주세요.</p>
+    <div class="card tbl"><table><tr><th>픽업</th><th>이름</th><th>연락처</th><th>메뉴</th><th class="r">개수</th><th>메모</th><th>상태</th></tr>
+    ${d.rows.map(r => `<tr style="${['완료', '취소'].includes(r.status) ? 'opacity:.5' : ''}"><td><b>${r.pickup.slice(5)}</b></td><td>${esc(r.name)}</td><td><a href="tel:${r.phone}">${r.phone}</a></td><td>${esc(r.item)}</td><td class="r">${r.qty}</td><td class="muted">${esc(r.memo)}</td>
+      <td><select data-rs="${r.id}" style="width:auto">${['접수', '확정', '제작중', '완료', '취소'].map(s => `<option ${s === r.status ? 'selected' : ''}>${s}</option>`).join('')}</select></td></tr>`).join('')}</table>
+    ${d.rows.length ? '' : '<div class="empty">예약이 없어요</div>'}</div>`;
+};
+
+R.reviews = async () => {
+  const d = await g('reviews');
+  setTimeout(() => document.querySelectorAll('[data-rvd]').forEach(b => b.onclick = async () => { if (confirm('이 후기를 지울까요?')) { await post('review_delete', {id: +b.dataset.rvd}); go('reviews'); } }));
+  return `<h2>고객 리뷰</h2><p class="muted">음료·디저트가 나온 뒤 손님이 주문 화면에서 남긴 후기예요. 메뉴판에 평균 별점이 보여요.</p>
+    <div class="card"><b>메뉴별 만족도</b>${bars(d.avg, 'name', 'a', v => '⭐ ' + v, 5)}</div>
+    <div class="card tbl"><table>${d.rows.map(r => `<tr><td>${r.created.slice(5, 16)}</td><td>${esc(r.name)}</td><td>${'⭐'.repeat(r.rating)}</td><td>${esc(r.text)}</td><td><button class="sm ghost" data-rvd="${r.id}">✕</button></td></tr>`).join('') || '<tr><td class="muted">아직 후기가 없어요</td></tr>'}</table></div>`;
+};
+
+R.forecast = async () => {
+  const d = await g('forecast');
+  return `<h2>판매 예측 (다음 7일)</h2><p class="muted">최근 8주 같은 요일의 판매량을 평균 내서 (최근 주에 더 무게) 예상해요. 지금 쌓인 데이터: <b>${d.data_days}일</b>. 4주 이상 쌓이면 꽤 믿을 만해져요 — 생산량·발주량 정할 때 참고하세요.</p>
+    <div class="grid2">${d.days.map(x => `<div class="card"><div class="row"><b class="grow">${x.day.slice(5)} (${x.wd})</b><span class="muted">근거 ${x.basis}주</span></div>
+      <div style="font-size:20px;font-weight:800;margin:4px 0">${x.basis ? '약 ' + won(x.revenue) : '데이터 부족'}</div>
+      ${x.items.map(i => `<div class="row"><span class="grow">${esc(i.name)}</span><span>${i.qty}개</span></div>`).join('')}</div>`).join('')}</div>`;
+};
+
+R.qr = async () => {
+  const s = await g('settings');
+  const N = Math.max(1, Math.min(60, +s.tables || 10));
+  setTimeout(async () => {
+    if (!window.qrcode) await new Promise(ok => { const sc = document.createElement('script'); sc.src = '/qrcode.js'; sc.onload = ok; document.head.appendChild(sc); });
+    document.querySelectorAll('.qr .box').forEach(b => { const q = qrcode(0, 'M'); q.addData(location.origin + '/?t=' + encodeURIComponent(b.dataset.t)); q.make(); b.innerHTML = q.createSvgTag({cellSize: 4, margin: 2}); });
+    $('#pr').onclick = () => print();
+  });
+  return `<h2>테이블 QR 코드</h2><p class="muted noprint">인쇄해서 테이블에 붙이세요. 손님이 찍으면 그 테이블 번호로 메뉴판이 열려요. 테이블 수는 '설정'에서 바꿔요. (사이트 주소가 바뀌면 다시 인쇄)</p>
+    <button class="primary noprint" id="pr">🖨️ 인쇄</button>
+    <div class="qrs" style="margin-top:12px">${Array.from({length: N}, (_, i) => `<div class="qr"><b style="font-size:18px">🐻 ${esc(s.cafe_name)}</b><div class="box" data-t="${i + 1}"></div><b>${i + 1}번 테이블</b><div class="muted">찍고 바로 주문하세요</div></div>`).join('')}
+    <div class="qr"><b style="font-size:18px">🐻 ${esc(s.cafe_name)}</b><div class="box" data-t="포장"></div><b>포장 · 카운터</b><div class="muted">찍고 바로 주문하세요</div></div></div>`;
+};
+
+R.settings = async () => {
+  const s = await g('settings');
+  setTimeout(() => {
+    $('#ssv').onclick = async () => { try { await post('settings', form($('#sf'))); toast('저장했어요'); go('settings'); } catch (e) { toast(e.message); } };
+    $('#lall').onclick = async () => { if (confirm('모든 기기(직원 태블릿 포함)의 로그인을 풀까요?')) { await post('logout_all', {}); location.reload(); } };
+  });
+  return `<h2>설정</h2><div class="card" id="sf">
+    <label>가게 이름</label><input name="cafe_name" value="${esc(s.cafe_name)}">
+    <label>메뉴판 공지 (비우면 안 보임)</label><input name="notice" value="${esc(s.notice)}" placeholder="예: 오늘 소금빵 2시에 나와요!">
+    <div class="row"><div class="grow"><label>포인트 적립률 (%)</label><input name="points_rate" type="number" step="0.5" value="${esc(s.points_rate)}"></div>
+      <div class="grow"><label>테이블 수 (QR)</label><input name="tables" type="number" value="${esc(s.tables)}"></div>
+      <div class="grow"><label>유통기한 임박 알림 (일)</label><input name="expiry_days" type="number" value="${esc(s.expiry_days)}"></div></div>
+    <label>새 사장님 비밀번호 (바꿀 때만, 6자 이상)</label><input name="new_password" type="password" autocomplete="new-password">
+    <button class="primary" id="ssv" style="margin-top:12px">저장</button></div>
+    <div class="card"><b>결제</b><p>${s.toss ? '✅ 토스페이먼츠 연결됨 — 손님이 폰에서 카드·간편결제' : '🧾 지금은 <b>카운터 결제</b> 모드예요. 손님 폰 결제를 쓰려면 토스페이먼츠 가맹 후 서버에 키를 넣어야 해요 (README 참고).'}</p></div>
+    <div class="card"><b>보안</b><p class="muted">잃어버린 태블릿이 있으면 눌러 주세요.</p><button class="danger" id="lall">모든 기기 로그아웃</button></div>`;
+};
+
+function bind() {}
+async function go(t) {
+  tab = t; if (location.hash.slice(1) !== t) history.replaceState(null, '', '#' + t);
+  $('#nav').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+  try { $('#view').innerHTML = await (R[t] || R.dashboard)(); }
+  catch (e) { if (e.status === 401) return showLogin(); $('#view').innerHTML = `<div class="card empty">${esc(e.message)}</div>`; }
+}
+function showLogin() { $('#login').hidden = false; $('#main').hidden = true; $('#logout').hidden = true; $('#pw').focus(); }
+$('#nav').innerHTML = TABS.map(([k, v]) => `<button data-t="${k}">${v}</button>`).join('');
+$('#nav').querySelectorAll('button').forEach(b => b.onclick = () => { go(b.dataset.t); window.scrollTo(0, 0); });
+window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if (t && t !== tab) go(t); });
+$('#lf').onsubmit = async e => {
+  e.preventDefault();
+  try { await api('/api/admin/login', {password: $('#pw').value}); $('#pw').value = ''; start(); } catch (er) { toast(er.message, 3500); }
+};
+$('#logout').onclick = async () => { await post('logout', {}); showLogin(); };
+async function start() {
+  const me = await api('/api/me');
+  if (me.role !== 'owner') return showLogin();
+  $('#login').hidden = true; $('#main').hidden = false; $('#logout').hidden = false; go(tab);
+}
+start();
+</script>
+</body>
+</html>

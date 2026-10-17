@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>주문 화면 · 샌드베어</title>
+<link rel="icon" href="/icon.svg">
+<link rel="stylesheet" href="/style.css">
+<style>
+.board{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;padding:12px 16px}
+.ord{background:var(--card);border:2px solid var(--line);border-radius:16px;padding:12px;display:flex;flex-direction:column}
+.ord.new{border-color:var(--warn);animation:blink 1s ease-in-out 6}
+.ord.making{border-color:var(--brand2)}
+.ord.ready{border-color:var(--ok);background:#f2faf4}
+@keyframes blink{50%{background:#fff3dc}}
+.ord h3{margin:0;font-size:20px}
+.ord .it{font-size:17px;padding:4px 0;border-bottom:1px dashed var(--line)}
+.ord .it small{display:block;color:var(--sub);font-size:13px}
+.ord .acts{display:flex;gap:6px;margin-top:auto;padding-top:10px;flex-wrap:wrap}
+.ord .acts button{flex:1;padding:12px 8px;white-space:nowrap}
+.filters button.on{background:var(--brand);color:#fff}
+</style>
+</head>
+<body>
+<header class="hd"><div class="wrap" style="max-width:none">
+  <a class="logo" href="/kds"><img src="/icon.svg" alt="">주문 화면</a>
+  <span class="row filters"><button class="sm on" data-f="all">전체</button><button class="sm" data-f="new">접수</button><button class="sm" data-f="making">제조중</button><button class="sm" data-f="ready">완료</button></span>
+  <span class="grow"></span>
+  <span class="muted" id="who"></span>
+  <button class="sm ghost" id="snd">🔔 소리 켜기</button>
+  <button class="sm ghost" id="out">나가기</button>
+</div></header>
+<div id="login" class="wrap" hidden><div class="card" style="max-width:380px;margin:40px auto;text-align:center">
+  <h3>직원 PIN 입력</h3><div id="pad"></div>
+  <div class="muted">사장님은 <a href="/admin">사장님 화면</a>에서 로그인하면 바로 열려요</div></div></div>
+<main id="board" class="board"></main>
+<details class="wrap" style="max-width:none;padding:0 16px 30px"><summary class="muted">오늘 픽업 끝난 주문</summary><div id="done"></div></details>
+<script src="/common.js"></script>
+<script>
+let seen = new Set(JSON.parse(sessionStorage.getItem('kds_seen') || '[]')), first = true, filter = 'all', data = null, sound = false;
+const label = {new: '접수', making: '제조중', ready: '완료 (픽업 대기)'};
+function ago(t) { const m = Math.floor((Date.now() - new Date(t.replace(' ', 'T') + '+09:00')) / 60000); return m < 1 ? '방금' : m + '분 전'; }
+function draw() {
+  if (!data) return;
+  const os = data.orders.filter(o => filter === 'all' || o.status === filter);
+  $('#board').innerHTML = os.length ? os.map(o => `<div class="ord ${o.status}">
+    <div class="row"><h3 class="grow">#${o.id} · ${esc(o.table)}${/^\d+$/.test(o.table) ? '번' : ''}</h3><span class="tag ${o.status === 'ready' ? 'ok' : o.status === 'new' ? 'warn' : ''}">${label[o.status]}</span></div>
+    <div class="muted">${ago(o.created)} · ${won(o.total)} · ${o.pay === 'toss' ? '💳 결제완료' : o.paid ? '🧾 결제완료' : '<b style="color:var(--bad)">🧾 미결제</b>'}${o.phone4 ? ' · ☎' + esc(o.phone4) : ''}</div>
+    <div style="margin:8px 0">${o.items.map(i => `<div class="it"><b>${esc(i.name)}</b> × ${i.qty}${i.opts ? `<small>${esc(i.opts)}</small>` : ''}</div>`).join('')}</div>
+    ${o.memo ? `<div class="tag warn" style="font-size:14px">💬 ${esc(o.memo)}</div>` : ''}
+    <div class="acts">
+      ${!o.paid && o.pay === 'counter' ? `<button data-a="paid" data-id="${o.id}">결제 확인</button>` : ''}
+      ${o.status === 'new' ? `<button data-a="making" data-id="${o.id}">제조 시작</button><button class="ok" data-a="ready" data-id="${o.id}">제조 완료 🔔</button>` : ''}
+      ${o.status === 'making' ? `<button data-a="back" data-id="${o.id}" class="sm ghost">↩</button><button class="ok" data-a="ready" data-id="${o.id}">제조 완료 🔔</button>` : ''}
+      ${o.status === 'ready' ? `<button data-a="making" data-id="${o.id}" class="sm ghost">↩</button><button class="primary" data-a="done" data-id="${o.id}">픽업 완료</button>` : ''}
+      <button class="sm danger" data-a="cancel" data-id="${o.id}" style="flex:none">취소</button>
+    </div></div>`).join('') : '<div class="empty" style="grid-column:1/-1">주문이 없어요 ☕</div>';
+  $('#board').querySelectorAll('button[data-a]').forEach(b => b.onclick = () => act(+b.dataset.id, b.dataset.a));
+  $('#done').innerHTML = data.done.map(o => `<div class="muted">#${o.id} · ${esc(o.table_no)} · ${won(o.total)} · ${(o.done_at || '').slice(11, 16)}</div>`).join('') || '<div class="muted">없음</div>';
+}
+async function act(id, a) {
+  if (a === 'cancel' && !confirm(`#${id} 주문을 취소할까요?`)) return;
+  try { data = await api('/api/kds/update', {id, action: a}); draw(); if (a === 'ready') toast(`#${id} 손님 폰에 완료 알림을 보냈어요`); } catch (e) { toast(e.message, 4000); }
+}
+async function poll() {
+  try {
+    data = await api('/api/kds/orders');
+    $('#login').hidden = true;
+    const fresh = data.orders.filter(o => o.status === 'new' && !seen.has(o.id));
+    fresh.forEach(o => seen.add(o.id)); sessionStorage.setItem('kds_seen', JSON.stringify([...seen].slice(-300)));
+    if (fresh.length && !first) { if (sound) beep(4); toast(`🆕 새 주문 ${fresh.length}건`); }
+    first = false; draw();
+  } catch (e) { if (e.status === 401) { $('#login').hidden = false; $('#board').innerHTML = ''; } }
+}
+const pad = pinPad($('#pad'), 6, async pin => {
+  try { const r = await api('/api/staff/login', {pin}); toast(r.name + '님 환영해요'); me(); poll(); } catch (e) { toast(e.message); pad.clear(); }
+});
+async function me() { const r = await api('/api/me'); $('#who').textContent = r.name || ''; }
+document.querySelectorAll('.filters button').forEach(b => b.onclick = () => { filter = b.dataset.f; document.querySelectorAll('.filters button').forEach(x => x.classList.toggle('on', x === b)); draw(); });
+$('#snd').onclick = () => { unlockAudio(); sound = true; beep(1); $('#snd').textContent = '🔔 소리 켜짐'; };
+$('#out').onclick = async () => { await api('/api/staff/logout', {}); location.reload(); };
+me(); poll(); setInterval(poll, 3000); setInterval(draw, 30000);
+</script>
+</body>
+</html>

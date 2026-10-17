@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>샌드베어 메뉴</title>
+<meta name="theme-color" content="#f7f1e8">
+<link rel="icon" href="/icon.svg">
+<link rel="stylesheet" href="/style.css">
+<style>
+.hero{padding:16px 0 4px}
+.hero h1{margin:0;font-size:22px}
+.tbl-badge{background:var(--brand);color:#fff;border-radius:99px;padding:3px 10px;font-size:13px;font-weight:700}
+.cats{display:flex;gap:6px;overflow-x:auto;padding:10px 0;scrollbar-width:none;position:sticky;top:56px;background:var(--bg);z-index:4}
+.cats::-webkit-scrollbar{display:none}
+.cats button{white-space:nowrap;background:var(--card);border:1px solid var(--line);border-radius:99px;padding:7px 14px}
+.cats button.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+.sec h2{font-size:17px;margin:18px 0 6px}
+.item{display:flex;gap:12px;align-items:center;padding:12px;background:var(--card);border:1px solid var(--line);border-radius:16px;margin:8px 0;cursor:pointer}
+.item .em{width:58px;height:58px;border-radius:14px;background:var(--soft);display:flex;align-items:center;justify-content:center;font-size:30px;flex:none}
+.item .nm{font-weight:700}
+.item .pr{font-weight:700;color:var(--brand);margin-top:2px}
+.item.out{opacity:.5;cursor:default}
+.cartbar{position:fixed;left:0;right:0;bottom:0;padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 30%);z-index:10}
+.cartbar button{width:100%;max-width:728px;display:flex;margin:0 auto;justify-content:space-between;padding:15px 18px;font-size:16px;border-radius:16px;box-shadow:0 6px 18px rgba(139,90,43,.35)}
+.opt-g{margin:14px 0}
+.opt-g h4{margin:0 0 6px;font-size:14px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{background:#fff;border:1px solid var(--line);font-weight:500}
+.chips button.on{border-color:var(--brand);background:var(--soft);color:var(--brand);font-weight:700}
+.qty{display:flex;align-items:center;gap:12px}
+.qty button{width:38px;height:38px;padding:0;border-radius:50%;font-size:20px}
+.steps{display:flex;justify-content:space-between;margin:18px 0 8px;position:relative}
+.steps div{flex:1;text-align:center;font-size:13px;color:var(--sub)}
+.steps div b{display:block;width:34px;height:34px;line-height:34px;margin:0 auto 6px;border-radius:50%;background:var(--soft);font-size:16px}
+.steps div.on{color:var(--ink);font-weight:700}
+.steps div.on b{background:var(--brand);color:#fff}
+.ready{background:var(--ok);color:#fff;border-radius:18px;padding:22px;text-align:center;animation:pulse 1.2s ease-in-out infinite}
+.ready h2{margin:0 0 4px;font-size:24px}
+@keyframes pulse{50%{transform:scale(1.02);box-shadow:0 0 0 8px rgba(63,143,90,.18)}}
+.stars button{background:none;padding:0 2px;font-size:26px;color:#d9c9b4}
+.stars button.on{color:#f0a500}
+.bottom-space{height:110px}
+</style>
+</head>
+<body>
+<header class="hd"><div class="wrap">
+  <a class="logo" href="/" id="home"><img src="/icon.svg" alt=""><span id="cafe">샌드베어</span></a>
+  <span id="tbl"></span>
+  <span class="grow"></span>
+  <button class="sm ghost" id="btnMore">더보기</button>
+</div></header>
+<main class="wrap" id="app"></main>
+<div class="cartbar" id="cartbar" hidden><button class="primary" id="btnCart"><span id="cartN"></span><span id="cartT"></span></button></div>
+<script src="/common.js"></script>
+<script>
+const P = new URLSearchParams(location.search);
+const TABLE = (P.get('t') || localStorage.getItem('sb_table') || '').slice(0, 10);
+if (P.get('t')) localStorage.setItem('sb_table', TABLE);
+let M = null, cart = JSON.parse(sessionStorage.getItem('sb_cart') || '[]');
+const saveCart = () => { sessionStorage.setItem('sb_cart', JSON.stringify(cart)); drawCartBar(); };
+
+async function load() {
+  M = await api('/api/menu');
+  $('#cafe').textContent = M.cafe; document.title = M.cafe + ' 메뉴';
+  $('#tbl').innerHTML = TABLE ? `<span class="tbl-badge">${esc(TABLE)}번 테이블</span>` : '';
+  // 품절된 메뉴는 장바구니에서 빼기
+  cart = cart.filter(c => { const it = M.items.find(i => i.id === c.id); return it && !it.soldout; });
+}
+
+function drawMenu() {
+  const app = $('#app');
+  app.innerHTML = `<div class="hero"><h1>무엇을 드릴까요? 🐻</h1>
+    ${M.notice ? `<div class="card" style="margin:10px 0 0">📢 ${esc(M.notice)}</div>` : ''}</div>
+    <nav class="cats">${M.cats.map(c => `<button data-c="${esc(c)}">${esc(c)}</button>`).join('')}</nav>
+    ${M.cats.map(c => `<section class="sec" id="c-${esc(c)}"><h2>${esc(c)}</h2>${M.items.filter(i => i.cat === c).map(itemHtml).join('')}</section>`).join('')}
+    <div class="bottom-space"></div>`;
+  app.querySelectorAll('.cats button').forEach(b => b.onclick = () => {
+    const s = document.getElementById('c-' + b.dataset.c); window.scrollTo({top: s.offsetTop - 110, behavior: 'smooth'});
+  });
+  app.querySelectorAll('.item').forEach(el => el.onclick = () => { const it = M.items.find(i => i.id == el.dataset.id); if (!it.soldout) openItem(it); });
+  const cats = [...app.querySelectorAll('.cats button')];
+  const spy = () => { let cur = cats[0]; cats.forEach(b => { const s = document.getElementById('c-' + b.dataset.c); if (s.getBoundingClientRect().top < 140) cur = b; }); cats.forEach(b => b.classList.toggle('on', b === cur)); };
+  window.onscroll = spy; spy();
+  drawCartBar();
+}
+function itemHtml(i) {
+  return `<div class="item ${i.soldout ? 'out' : ''}" data-id="${i.id}">
+    <div class="em">${esc(i.emoji || '🍽️')}</div>
+    <div class="grow"><div class="nm">${esc(i.name)} ${i.soldout ? '<span class="tag bad">품절</span>' : i.left ? `<span class="tag warn">${i.left}개 남음</span>` : ''}</div>
+      ${i.descr ? `<div class="muted">${esc(i.descr)}</div>` : ''}
+      <div class="pr">${won(i.price)} ${i.rating ? `<span class="muted" style="font-weight:400">⭐ ${i.rating[0]} (${i.rating[1]})</span>` : ''}</div></div></div>`;
+}
+
+function openItem(it) {
+  const sel = {}; let qty = 1;
+  it.options.forEach((g, gi) => sel[gi] = g.required ? [0] : []);
+  const m = modal(`<div class="row"><div style="font-size:34px">${esc(it.emoji || '🍽️')}</div><div class="grow"><h3 style="margin:0">${esc(it.name)}</h3><div class="muted">${esc(it.descr || '')}</div></div></div>
+    <div id="opts"></div>
+    <div class="row" style="margin-top:16px"><div class="qty"><button id="mn">−</button><b id="q">1</b><button id="pl">+</button></div><span class="grow"></span></div>
+    <button class="primary" id="add" style="width:100%;margin-top:16px;padding:14px"></button>`);
+  const price = () => it.price + it.options.reduce((s, g, gi) => s + sel[gi].reduce((a, c) => a + g.choices[c].p, 0), 0);
+  const draw = () => {
+    $('#opts', m).innerHTML = it.options.map((g, gi) => `<div class="opt-g"><h4>${esc(g.name)} ${g.required ? '<span class="tag">필수</span>' : '<span class="muted">선택</span>'}</h4>
+      <div class="chips">${g.choices.map((c, ci) => `<button data-g="${gi}" data-c="${ci}" class="${sel[gi].includes(ci) ? 'on' : ''}">${esc(c.n)}${c.p ? ' +' + c.p.toLocaleString() : ''}</button>`).join('')}</div></div>`).join('');
+    $('#opts', m).querySelectorAll('button').forEach(b => b.onclick = () => {
+      const g = +b.dataset.g, c = +b.dataset.c;
+      if (it.options[g].required) sel[g] = [c];
+      else sel[g] = sel[g].includes(c) ? sel[g].filter(x => x !== c) : [...sel[g], c];
+      draw();
+    });
+    $('#q', m).textContent = qty; $('#add', m).textContent = `${qty}개 담기 · ${won(price() * qty)}`;
+  };
+  $('#mn', m).onclick = () => { qty = Math.max(1, qty - 1); draw(); };
+  $('#pl', m).onclick = () => { qty = Math.min(it.left || 30, qty + 1); draw(); };
+  $('#add', m).onclick = () => {
+    const label = it.options.map((g, gi) => sel[gi].map(c => g.choices[c].n).join('/')).filter(Boolean).join(', ');
+    const key = it.id + '|' + JSON.stringify(sel); const ex = cart.find(c => c.key === key);
+    if (ex) ex.qty += qty; else cart.push({key, id: it.id, name: it.name, label, opts: sel, unit: price(), qty});
+    saveCart(); m.remove(); toast('장바구니에 담았어요');
+  };
+  draw();
+}
+
+function drawCartBar() {
+  const n = cart.reduce((s, c) => s + c.qty, 0);
+  $('#cartbar').hidden = !n || !!P.get('o') || !M;
+  $('#cartN').textContent = `🛒 ${n}개 담김`; $('#cartT').textContent = won(cart.reduce((s, c) => s + c.unit * c.qty, 0)) + ' 주문하기';
+}
+
+function openCart() {
+  unlockAudio();
+  const m = modal(`<h3 style="margin-top:0">장바구니 ${TABLE ? `· ${esc(TABLE)}번 테이블` : ''}</h3><div id="lines"></div>
+    ${TABLE ? '' : `<label>테이블 번호 (포장이면 비워두세요)</label><input id="tno" inputmode="numeric" placeholder="예: 3">`}
+    <label>요청사항 (선택)</label><input id="memo" maxlength="100" placeholder="예: 얼음 적게">
+    <label>휴대폰 번호 (선택 · 포인트 ${M.points_rate}% 적립)</label><input id="phone" inputmode="tel" placeholder="010-0000-0000" value="${esc(localStorage.getItem('sb_phone') || '')}">
+    <label>결제 방법</label><div class="chips" id="pay">
+      ${M.toss ? '<button data-p="toss" class="on">💳 카드 · 간편결제</button>' : ''}
+      <button data-p="counter" class="${M.toss ? '' : 'on'}">🧾 카운터에서 결제</button></div>
+    <div id="pm"></div><div id="ag"></div>
+    <button class="primary" id="go" style="width:100%;margin-top:16px;padding:15px;font-size:16px"></button>`);
+  let pay = M.toss ? 'toss' : 'counter';
+  const total = () => cart.reduce((s, c) => s + c.unit * c.qty, 0);
+  const draw = () => {
+    if (!cart.length) { m.remove(); drawCartBar(); return; }
+    $('#lines', m).innerHTML = cart.map((c, i) => `<div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">
+      <div class="grow"><b>${esc(c.name)}</b>${c.label ? `<div class="muted">${esc(c.label)}</div>` : ''}<div>${won(c.unit * c.qty)}</div></div>
+      <div class="qty"><button class="sm" data-i="${i}" data-d="-1">−</button><b>${c.qty}</b><button class="sm" data-i="${i}" data-d="1">+</button></div></div>`).join('');
+    $('#lines', m).querySelectorAll('button').forEach(b => b.onclick = () => { const c = cart[b.dataset.i]; c.qty += +b.dataset.d; if (c.qty < 1) cart.splice(b.dataset.i, 1); saveCart(); draw(); });
+    $('#go', m).textContent = `${won(total())} ${pay === 'toss' ? '결제하기' : '주문하기'}`;
+  };
+  $('#pay', m).querySelectorAll('button').forEach(b => b.onclick = () => { pay = b.dataset.p; $('#pay', m).querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); draw(); });
+  $('#go', m).onclick = async () => {
+    const btn = $('#go', m); btn.disabled = true;
+    try {
+      const phone = $('#phone', m).value.trim(); if (phone) localStorage.setItem('sb_phone', phone);
+      if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {});
+      const r = await api('/api/order', {table: TABLE || ($('#tno', m) || {}).value || '', memo: $('#memo', m).value, phone, pay,
+        items: cart.map(c => ({id: c.id, qty: c.qty, opts: c.opts}))});
+      if (r.pay === 'toss') return tossPay(r, m);
+      done(r.token); m.remove();
+    } catch (e) { toast(e.message, 3500); btn.disabled = false; if (e.status === 409) { await load(); draw(); } }
+  };
+  draw();
+}
+
+// 토스페이먼츠 결제위젯
+function loadScript(src) { return new Promise((ok, no) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = no; document.head.appendChild(s); }); }
+async function tossPay(r, m) {
+  try {
+    if (!window.TossPayments) await loadScript('https://js.tosspayments.com/v2/standard');
+    const widgets = TossPayments(M.toss).widgets({customerKey: TossPayments.ANONYMOUS});
+    await widgets.setAmount({currency: 'KRW', value: r.total});
+    $('#go', m).hidden = true;
+    await Promise.all([widgets.renderPaymentMethods({selector: '#pm', variantKey: 'DEFAULT'}), widgets.renderAgreement({selector: '#ag', variantKey: 'AGREEMENT'})]);
+    const btn = document.createElement('button'); btn.className = 'primary'; btn.style.cssText = 'width:100%;margin-top:12px;padding:15px;font-size:16px';
+    btn.textContent = `${won(r.total)} 결제하기`; $('#ag', m).after(btn);
+    sessionStorage.setItem('sb_pending', r.token);
+    btn.onclick = () => widgets.requestPayment({orderId: r.toss_id, orderName: r.order_name,
+      successUrl: location.origin + '/?pay=ok', failUrl: location.origin + '/?pay=fail'}).catch(e => toast(e.message || '결제를 취소했어요'));
+  } catch (e) { toast('결제창을 못 불러왔어요 — 카운터 결제로 주문해 주세요', 4000); api('/api/pay/fail', {orderId: r.toss_id}); $('#go', m).hidden = false; $('#go', m).disabled = false; }
+}
+
+function done(token) {
+  cart = []; saveCart();
+  const mine = JSON.parse(localStorage.getItem('sb_orders') || '[]').filter(o => o.at > Date.now() - 86400e3);
+  mine.unshift({token, at: Date.now()}); localStorage.setItem('sb_orders', JSON.stringify(mine.slice(0, 10)));
+  history.replaceState(null, '', '/?o=' + token); track(token);
+}
+
+// 주문 상태 · 제조 완료 알림
+let tracking, lastStatus;
+async function track(token) {
+  $('#cartbar').hidden = true; window.onscroll = null;
+  const app = $('#app');
+  const tick = async () => {
+    let o; try { o = await api('/api/order/' + token); } catch (e) { app.innerHTML = `<div class="card empty">${esc(e.message)}</div>`; return; }
+    const st = {pending_payment: 0, new: 1, making: 2, ready: 3, done: 3, canceled: -1}[o.status];
+    if (o.status === 'ready' && lastStatus && lastStatus !== 'ready') notifyReady(o);
+    lastStatus = o.status;
+    app.innerHTML = `<div class="card" style="margin-top:16px">
+      <div class="row"><h2 style="margin:0" class="grow">주문번호 ${o.no}</h2><span class="tag">${esc(o.table)}${/^\d+$/.test(o.table) ? '번 테이블' : ''}</span></div>
+      ${st < 0 ? '<p class="tag bad">취소된 주문이에요</p>' : `
+      <div class="steps">${['접수', '제조중', '완료'].map((s, i) => `<div class="${st >= i + 1 ? 'on' : ''}"><b>${['📝', '☕', '🔔'][i]}</b>${s}</div>`).join('')}</div>`}
+      ${o.status === 'ready' ? `<div class="ready"><h2>🔔 음료·디저트가 준비됐어요!</h2>카운터에서 픽업해 주세요 · 주문번호 <b>${o.no}</b></div>` : ''}
+      ${o.status === 'done' ? '<p class="muted" style="text-align:center">맛있게 드세요 🐻</p>' : ''}
+      ${o.status === 'new' || o.status === 'making' ? '<p class="muted" style="text-align:center">완료되면 이 화면에서 소리·진동으로 알려드려요.<br>화면을 켜 두세요.</p>' : ''}
+      <div style="margin-top:12px">${o.items.map(i => `<div class="row"><span class="grow">${esc(i.name)} × ${i.qty}${i.opts ? `<div class="muted">${esc(i.opts)}</div>` : ''}</span><span>${won(i.unit_price * i.qty)}</span></div>`).join('')}
+      <div class="row" style="margin-top:8px;font-weight:700"><span class="grow">합계</span><span>${won(o.total)}</span></div>
+      <div class="muted">${o.pay === 'toss' ? '💳 결제 완료' : o.paid ? '🧾 카운터 결제 완료' : '🧾 카운터에서 결제해 주세요'}</div></div></div>
+      ${(o.status === 'ready' || o.status === 'done') && !o.reviewed ? `<button class="ghost" id="rv" style="width:100%">⭐ 후기 남기기</button>` : ''}
+      <button class="ghost" id="more" style="width:100%;margin-top:8px">메뉴 더 보기</button>`;
+    if ($('#rv')) $('#rv').onclick = () => review(token, o);
+    $('#more').onclick = () => { clearInterval(tracking); history.replaceState(null, '', '/' + (TABLE ? '?t=' + encodeURIComponent(TABLE) : '')); P.delete('o'); drawMenu(); };
+    if (o.status === 'done' || o.status === 'canceled') clearInterval(tracking);
+  };
+  clearInterval(tracking); await tick(); tracking = setInterval(tick, 3000);
+}
+function notifyReady(o) {
+  beep(6); if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 400]);
+  try { if ('Notification' in window && Notification.permission === 'granted') new Notification(`${M ? M.cafe : '샌드베어'} 주문 ${o.no}번 준비 완료!`, {body: '카운터에서 픽업해 주세요 🐻', icon: '/icon.svg'}); } catch (e) {}
+  document.title = '🔔 픽업해 주세요!';
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden && M) document.title = M.cafe + ' 메뉴'; });
+
+function review(token, o) {
+  const uniq = [...new Map(o.items.map(i => [i.menu_id, i])).values()];
+  const R = {}; uniq.forEach(i => R[i.menu_id] = {rating: 5, text: ''});
+  const m = modal(`<h3 style="margin-top:0">맛은 어떠셨어요?</h3>${uniq.map(i => `<div class="card"><b>${esc(i.name)}</b>
+    <div class="stars" data-m="${i.menu_id}">${[1,2,3,4,5].map(s => `<button data-s="${s}" class="on">★</button>`).join('')}</div>
+    <input data-t="${i.menu_id}" maxlength="300" placeholder="한 줄 후기 (선택)"></div>`).join('')}
+    <button class="primary" id="send" style="width:100%">보내기</button>`);
+  m.querySelectorAll('.stars').forEach(st => st.querySelectorAll('button').forEach(b => b.onclick = () => {
+    R[st.dataset.m].rating = +b.dataset.s; st.querySelectorAll('button').forEach(x => x.classList.toggle('on', +x.dataset.s <= +b.dataset.s));
+  }));
+  $('#send', m).onclick = async () => {
+    m.querySelectorAll('[data-t]').forEach(i => R[i.dataset.t].text = i.value);
+    try { await api('/api/review', {token, reviews: Object.entries(R).map(([k, v]) => ({menu_id: +k, ...v}))}); m.remove(); toast('고마워요! 🐻'); track(token); }
+    catch (e) { toast(e.message); }
+  };
+}
+
+function more() {
+  const mine = JSON.parse(localStorage.getItem('sb_orders') || '[]').filter(o => o.at > Date.now() - 86400e3);
+  const m = modal(`<h3 style="margin-top:0">더보기</h3>
+    ${mine.length ? `<div class="card"><b>오늘 내 주문</b>${mine.map(o => `<div><a href="/?o=${esc(o.token)}">주문 보기 · ${new Date(o.at).toTimeString().slice(0, 5)}</a></div>`).join('')}</div>` : ''}
+    <div class="card"><b>🎂 예약 주문 (홀케이크 등)</b>
+      <label>이름</label><input id="rn" maxlength="20"><label>연락처</label><input id="rp" inputmode="tel" placeholder="010-0000-0000">
+      <label>메뉴 · 요청 (예: 바스크 치즈케이크 1호, 레터링 "생일 축하해")</label><input id="ri" maxlength="60">
+      <div class="row"><div class="grow"><label>개수</label><input id="rq" type="number" min="1" value="1"></div><div class="grow"><label>픽업 날짜·시간</label><input id="rt" type="datetime-local"></div></div>
+      <label>메모</label><input id="rm" maxlength="200">
+      <button class="primary" id="rs" style="width:100%;margin-top:10px">예약 신청</button>
+      <div class="muted" style="margin-top:6px">사장님이 확인 후 연락드려요.</div></div>
+    <div class="card"><b>🎁 내 포인트</b><div class="row" style="margin-top:8px"><input id="pp" inputmode="tel" placeholder="010-0000-0000" value="${esc(localStorage.getItem('sb_phone') || '')}"><button id="pc">조회</button></div><div id="pr" style="margin-top:6px"></div></div>`);
+  $('#rs', m).onclick = async () => {
+    try { await api('/api/reservation', {name: $('#rn', m).value, phone: $('#rp', m).value, item: $('#ri', m).value, qty: $('#rq', m).value, pickup: $('#rt', m).value, memo: $('#rm', m).value}); m.remove(); toast('예약 신청 완료! 확인 후 연락드릴게요', 3500); }
+    catch (e) { toast(e.message); }
+  };
+  $('#pc', m).onclick = async () => {
+    try { const r = await api('/api/points?phone=' + encodeURIComponent($('#pp', m).value)); $('#pr', m).innerHTML = `<b>${r.points.toLocaleString()}P</b> <span class="muted">· 방문 ${r.visits}번</span>`; }
+    catch (e) { toast(e.message); }
+  };
+}
+
+$('#btnCart').onclick = openCart;
+$('#btnMore').onclick = more;
+(async () => {
+  try { await load(); } catch (e) { $('#app').innerHTML = '<div class="card empty">메뉴를 못 불러왔어요. 새로고침해 주세요.</div>'; return; }
+  if (P.get('pay') === 'ok') {          // 토스 결제 후 돌아옴 → 서버에서 승인
+    $('#app').innerHTML = '<div class="card empty">결제 확인 중…</div>';
+    try { const r = await api('/api/pay/confirm', {paymentKey: P.get('paymentKey'), orderId: P.get('orderId'), amount: +P.get('amount')}); done(r.token); }
+    catch (e) { $('#app').innerHTML = `<div class="card empty">❌ ${esc(e.message)}<br><br><a href="/">메뉴로</a></div>`; }
+    return;
+  }
+  if (P.get('pay') === 'fail') { api('/api/pay/fail', {orderId: P.get('orderId')}).catch(() => {}); toast(P.get('message') || '결제가 취소됐어요', 3500); history.replaceState(null, '', '/'); }
+  if (P.get('o')) return track(P.get('o'));
+  drawMenu();
+})();
+</script>
+</body>
+</html>

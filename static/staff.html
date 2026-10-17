@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>직원 · 샌드베어</title>
+<link rel="icon" href="/icon.svg">
+<link rel="stylesheet" href="/style.css">
+<style>
+.clock{font-size:44px;font-weight:800;text-align:center;letter-spacing:1px}
+.mode{display:flex;gap:8px;justify-content:center;margin:10px 0}
+.mode button{padding:14px 26px;font-size:17px}
+.mode button.on{background:var(--brand);color:#fff}
+.chk{display:flex;gap:10px;align-items:center;padding:12px 4px;border-bottom:1px solid var(--line);cursor:pointer}
+.chk .box{width:26px;height:26px;border-radius:8px;border:2px solid var(--brand2);flex:none;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800}
+.chk.done .box{background:var(--ok);border-color:var(--ok)}
+.chk.done .t{text-decoration:line-through;color:var(--sub)}
+</style>
+</head>
+<body>
+<header class="hd"><div class="wrap">
+  <a class="logo" href="/staff"><img src="/icon.svg" alt="">직원</a><span class="grow"></span>
+  <a href="/kds" class="sm">주문 화면 →</a>
+</div></header>
+<main class="wrap">
+  <div class="card" style="text-align:center">
+    <div class="clock" id="clk"></div><div class="muted" id="dt"></div>
+    <div class="mode"><button data-m="in" class="on">출근</button><button data-m="out">퇴근</button><button data-m="check">체크리스트</button></div>
+    <div class="muted" id="hint">본인 PIN 을 누르세요</div>
+    <div id="pad"></div>
+  </div>
+  <div class="card" id="chk" hidden></div>
+</main>
+<script src="/common.js"></script>
+<script>
+let mode = 'in';
+const tick = () => { const d = new Date(); $('#clk').textContent = d.toTimeString().slice(0, 8); $('#dt').textContent = d.toLocaleDateString('ko-KR', {month: 'long', day: 'numeric', weekday: 'long'}); };
+tick(); setInterval(tick, 1000);
+document.querySelectorAll('.mode button').forEach(b => b.onclick = () => {
+  mode = b.dataset.m; document.querySelectorAll('.mode button').forEach(x => x.classList.toggle('on', x === b));
+  $('#hint').textContent = mode === 'check' ? '체크리스트를 열려면 PIN 을 누르세요' : '본인 PIN 을 누르세요';
+  if (mode === 'check') openChecklist(); else $('#chk').hidden = true;
+});
+const pad = pinPad($('#pad'), 6, async pin => {
+  try {
+    if (mode === 'check') { await api('/api/staff/login', {pin}); return openChecklist(); }
+    const r = await api('/api/staff/clock', {pin, action: mode});
+    modal(`<div style="text-align:center;padding:10px"><div style="font-size:48px">${mode === 'in' ? '☀️' : '🌙'}</div><h3>${esc(r.msg)}</h3><button class="primary" onclick="this.closest('.modal').remove()">확인</button></div>`);
+    setTimeout(() => document.querySelectorAll('.modal').forEach(m => m.remove()), 4000);
+  } catch (e) { toast(e.message, 3000); pad.clear(); }
+});
+async function openChecklist() {
+  let r;
+  try { r = await api('/api/checklist'); } catch (e) { $('#chk').hidden = true; return; }
+  const box = $('#chk'); box.hidden = false;
+  const sec = (k, t) => { const it = r.items.filter(i => i.kind === k); const n = it.filter(i => i.done).length;
+    return `<h3 style="margin:12px 0 4px">${t} <span class="tag ${n === it.length && n ? 'ok' : ''}">${n}/${it.length}</span></h3>` +
+      it.map(i => `<div class="chk ${i.done ? 'done' : ''}" data-id="${i.id}"><div class="box">${i.done ? '✓' : ''}</div><div class="grow t">${esc(i.text)}</div>${i.done ? `<span class="muted">${esc(i.by)} ${i.at}</span>` : ''}</div>`).join(''); };
+  box.innerHTML = `<div class="row"><b class="grow">${r.day} 체크리스트</b><button class="sm ghost" id="lo">닫기</button></div>${sec('open', '☀️ 오픈')}${sec('close', '🌙 마감')}`;
+  box.querySelectorAll('.chk').forEach(el => el.onclick = async () => { try { await api('/api/checklist/toggle', {item_id: +el.dataset.id}); openChecklist(); } catch (e) { toast(e.message); } });
+  $('#lo').onclick = () => { box.hidden = true; };
+  box.scrollIntoView({behavior: 'smooth'});
+}
+</script>
+</body>
+</html>

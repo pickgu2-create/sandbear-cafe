@@ -1,0 +1,48 @@
+/* 샌드베어 — 모래색 · 곰 갈색 */
+:root{
+  --bg:#f7f1e8; --card:#fffdf9; --line:#eadfce; --ink:#3b2a1d; --sub:#8a7562; --brand:#8b5a2b; --brand2:#c08a52;
+  --soft:#f1e5d3; --ok:#3f8f5a; --warn:#d18b1f; --bad:#c2453a; --shadow:0 2px 10px rgba(80,50,20,.08);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Pretendard","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;font-size:15px;line-height:1.45}
+a{color:var(--brand)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:0;border-radius:12px;padding:10px 14px;background:var(--soft);font-weight:600}
+button.primary{background:var(--brand);color:#fff}
+button.ghost{background:transparent;border:1px solid var(--line)}
+button.danger{background:#fbe6e3;color:var(--bad)}
+button.ok{background:var(--ok);color:#fff}
+button:disabled{opacity:.45;cursor:default}
+button.sm{padding:6px 10px;font-size:13px;border-radius:9px}
+input,select,textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff}
+textarea{min-height:70px;resize:vertical}
+label{display:block;font-size:13px;color:var(--sub);margin:8px 0 4px}
+.wrap{max-width:760px;margin:0 auto;padding:0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:var(--shadow);margin:12px 0}
+.row{display:flex;gap:8px;align-items:center}
+.row.wrapx{flex-wrap:wrap}
+.grow{flex:1;min-width:0}
+.muted{color:var(--sub);font-size:13px}
+.tag{display:inline-block;font-size:12px;padding:2px 8px;border-radius:99px;background:var(--soft);color:var(--brand)}
+.tag.bad{background:#fbe6e3;color:var(--bad)} .tag.warn{background:#fdf0d8;color:#9a6205} .tag.ok{background:#e2f2e7;color:var(--ok)}
+.hd{position:sticky;top:0;z-index:5;background:rgba(247,241,232,.95);backdrop-filter:blur(6px);border-bottom:1px solid var(--line)}
+.hd .wrap{display:flex;align-items:center;gap:10px;height:56px}
+.logo{display:flex;align-items:center;gap:8px;font-weight:800;font-size:18px;color:var(--brand);text-decoration:none}
+.logo img{width:30px;height:30px}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:12px;z-index:99;max-width:90vw;font-size:14px;opacity:0;transition:.25s;pointer-events:none}
+.toast.on{opacity:1}
+.modal{position:fixed;inset:0;background:rgba(40,25,10,.45);z-index:50;display:flex;align-items:flex-end;justify-content:center}
+.modal .sheet{background:var(--card);width:100%;max-width:560px;max-height:90vh;overflow:auto;border-radius:20px 20px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom))}
+@media(min-width:700px){.modal{align-items:center}.modal .sheet{border-radius:20px}}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{color:var(--sub);font-weight:600;font-size:12px}
+td.r,th.r{text-align:right}
+.tbl{overflow-x:auto}
+.bar{height:8px;border-radius:4px;background:var(--brand2)}
+.pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:300px;margin:12px auto}
+.pin-pad button{font-size:24px;padding:16px 0;background:var(--card);border:1px solid var(--line)}
+.pin-dots{display:flex;gap:12px;justify-content:center;margin:14px 0}
+.pin-dots i{width:14px;height:14px;border-radius:50%;border:2px solid var(--brand);display:block}
+.pin-dots i.on{background:var(--brand)}
+.empty{text-align:center;color:var(--sub);padding:24px 0}
