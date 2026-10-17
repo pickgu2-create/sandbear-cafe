@@ -9,13 +9,26 @@
 <link rel="stylesheet" href="/style.css">
 <style>
 .layout{display:flex;max-width:1200px;margin:0 auto}
-nav.side{width:190px;flex:none;padding:12px 8px;position:sticky;top:56px;height:calc(100vh - 56px);overflow:auto}
-nav.side button{display:block;width:100%;text-align:left;background:none;padding:9px 12px;font-weight:500;border-radius:10px}
-nav.side button.on{background:var(--brand);color:#fff;font-weight:700}
+nav.side{width:150px;flex:none;padding:12px 8px;position:sticky;top:56px;height:calc(100vh - 56px);overflow:auto}
+nav.side button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;padding:11px 12px;font-weight:600;border-radius:12px;font-size:15px}
+nav.side button i{font-style:normal;font-size:19px}
+nav.side button.on{background:var(--brand);color:#fff}
 main.body{flex:1;min-width:0;padding:4px 16px 40px}
+.subtabs{display:flex;gap:6px;overflow-x:auto;padding:12px 0 2px;scrollbar-width:none}
+.subtabs::-webkit-scrollbar{display:none}
+.subtabs button{white-space:nowrap;background:var(--card);border:1px solid var(--line);border-radius:99px;padding:8px 16px}
+.subtabs button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.tiles button{display:flex;flex-direction:column;align-items:flex-start;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;text-align:left;font-weight:700}
+.tiles button i{font-style:normal;font-size:24px}
+.tiles button span{font-weight:400;font-size:12px;color:var(--sub)}
 @media(max-width:820px){
-  .layout{display:block} nav.side{width:auto;height:auto;position:sticky;top:56px;z-index:4;background:var(--bg);display:flex;overflow-x:auto;padding:8px 16px;gap:4px;border-bottom:1px solid var(--line)}
-  nav.side button{white-space:nowrap;width:auto}
+  .layout{display:block} main.body{padding-bottom:90px}
+  nav.side{position:fixed;left:0;right:0;bottom:0;top:auto;width:auto;height:auto;z-index:20;background:var(--card);border-top:1px solid var(--line);
+    display:grid;grid-template-columns:repeat(7,1fr);padding:4px 2px calc(4px + env(safe-area-inset-bottom));box-shadow:0 -2px 10px rgba(80,50,20,.06)}
+  nav.side button{flex-direction:column;gap:1px;padding:6px 0;font-size:11px;justify-content:center;text-align:center;border-radius:10px}
+  nav.side button.on{background:var(--soft);color:var(--brand)}
+  .hd .hide-m{display:none}
 }
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
 .kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px}
@@ -36,10 +49,9 @@ h2{font-size:19px;margin:16px 0 6px}
 </head>
 <body>
 <header class="hd"><div class="wrap" style="max-width:1200px">
-  <a class="logo" href="/admin"><img src="/icon.svg" alt="">사장님 화면</a><span class="grow"></span>
-  <a href="/staff" target="_blank" class="muted">출퇴근</a>
-  <a href="/kds" target="_blank" class="muted">주문 화면</a>
-  <a href="/" target="_blank" class="muted">메뉴판</a>
+  <a class="logo" href="/" title="메뉴판(홈)으로"><img src="/icon.svg" alt="샌드베어 홈"></a><b style="color:var(--brand)">사장님</b><span class="grow"></span>
+  <a href="/kds" target="_blank" class="muted hide-m">주문 화면</a>
+  <a href="/staff" target="_blank" class="muted hide-m">출퇴근</a>
   <button class="sm ghost" id="logout" hidden>로그아웃</button>
 </div></header>
 <div id="login" class="wrap" hidden><div class="card" style="max-width:380px;margin:50px auto">
@@ -52,13 +64,18 @@ h2{font-size:19px;margin:16px 0 6px}
 </div>
 <script src="/common.js"></script>
 <script>
-const TABS = [
-  ['dashboard', '📊 매출 분석'], ['orders', '🧾 주문 내역'], ['menu', '☕ 메뉴 · 품절'], ['ingredients', '🧈 재료 · 재고'],
-  ['recipes', '🧮 레시피 원가'], ['production', '🥐 생산일지'], ['purchase', '🚚 발주 목록'], ['attendance', '⏰ 출퇴근'],
-  ['staff', '👩‍🍳 직원'], ['checklist', '✅ 체크리스트'], ['customers', '🎁 고객 적립'], ['reservations', '🎂 예약 주문'],
-  ['reviews', '⭐ 리뷰'], ['forecast', '🔮 판매 예측'], ['qr', '🔳 테이블 QR'], ['settings', '⚙️ 설정'],
+// 큰 메뉴 7개 → 그 안의 작은 탭
+const GROUPS = [
+  ['home', '🏠', '홈', [['home', '오늘']]],
+  ['sales', '📊', '매출', [['dashboard', '매출 분석'], ['orders', '주문 내역'], ['forecast', '판매 예측']]],
+  ['menus', '☕', '메뉴', [['menu', '메뉴 · 품절'], ['recipes', '레시피 원가']]],
+  ['stock', '🧈', '재고', [['ingredients', '재료 · 재고'], ['production', '생산일지'], ['purchase', '발주 목록']]],
+  ['people', '👩‍🍳', '직원', [['attendance', '출퇴근'], ['staff', '직원 · PIN'], ['checklist', '체크리스트']]],
+  ['guests', '🎁', '손님', [['reservations', '예약 주문'], ['customers', '포인트 적립'], ['reviews', '리뷰']]],
+  ['setup', '⚙️', '설정', [['settings', '설정'], ['qr', '테이블 QR']]],
 ];
-let tab = location.hash.slice(1) || 'dashboard', D = {};
+const groupOf = t => GROUPS.find(g => g[3].some(x => x[0] === t)) || GROUPS[0];
+let tab = location.hash.slice(1) || 'home', D = {};
 const today = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
 const n = v => (+v || 0).toLocaleString('ko-KR');
 const g = (sec, q = '') => api(`/api/admin/${sec}${q}`);
@@ -71,22 +88,30 @@ function bars(rows, key, val, fmt = won, max) {
 }
 
 const R = {};   // 탭별 화면
-R.dashboard = async () => {
+R.home = async () => {
   const d = await g('dashboard');
   const diff = d.yesterday.amt ? Math.round((d.today.amt / d.yesterday.amt - 1) * 100) : null;
-  const wd = '일월화수목금토';
-  return `<div class="card"><b>바로 가기</b><div class="row wrapx" style="margin-top:8px">
-      <a href="#ingredients"><button>🧈 재료 재고 수정</button></a><a href="#menu"><button>☕ 메뉴 이름·가격 수정</button></a>
-      <a href="#production"><button>🥐 오늘 생산 기록</button></a><a href="#attendance"><button>⏰ 직원 출퇴근</button></a>
-      <a href="#staff"><button>👩‍🍳 직원 등록·PIN</button></a><a href="#qr"><button>🔳 QR 인쇄</button></a></div></div>
-    <h2>오늘</h2><div class="kpis">
+  const tile = (t, i, name, sub) => `<button data-go="${t}"><i>${i}</i>${name}<span>${sub}</span></button>`;
+  setTimeout(() => document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go)));
+  return `<h2>오늘</h2><div class="kpis">
     <div class="kpi"><span class="muted">오늘 매출</span><b>${won(d.today.amt)}</b><span class="muted">${d.today.n}건 ${diff === null ? '' : `· 어제보다 ${diff >= 0 ? '+' : ''}${diff}%`}</span></div>
     <div class="kpi"><span class="muted">이번 달</span><b>${won(d.month.amt)}</b><span class="muted">${d.month.n}건</span></div>
     <div class="kpi"><span class="muted">객단가 (오늘)</span><b>${won(d.today.n ? d.today.amt / d.today.n : 0)}</b></div>
-    <div class="kpi"><span class="muted">새 예약</span><b>${d.pending_res}건</b><a href="#reservations">보기 →</a></div></div>
+    <div class="kpi"><span class="muted">새 예약</span><b>${d.pending_res}건</b></div></div>
     ${d.alerts.length ? `<div class="card"><b>⚠️ 확인할 것</b>${d.alerts.map(a => `<div class="al">${{low: '📉', expired: '⛔', soon: '⏳', soldout: '🚫'}[a.kind]} ${esc(a.text)}</div>`).join('')}</div>` : ''}
     ${d.unpaid.length ? `<div class="card"><b>🧾 카운터 미결제 주문</b>${d.unpaid.map(o => `<div class="al">#${o.id} · ${esc(o.table_no)} · ${won(o.total)} · ${o.created.slice(5, 16)}</div>`).join('')}<div class="muted">주문 화면에서 '결제 확인'을 눌러 주세요</div></div>` : ''}
-    <div class="grid2">
+    <h2>자주 쓰는 것</h2><div class="tiles">
+      ${tile('ingredients', '🧈', '재료 재고 수정', '입고 · 남은 양 · 유통기한')}${tile('menu', '☕', '메뉴 수정', '이름 · 가격 · 품절')}
+      ${tile('production', '🥐', '오늘 생산 기록', '구운 개수 · 폐기')}${tile('attendance', '⏰', '직원 출퇴근', '근무시간 · 급여')}
+      ${tile('reservations', '🎂', '예약 주문', `새 예약 ${d.pending_res}건`)}${tile('purchase', '🚚', '발주 목록', '부족한 재료')}</div>
+    <h2>다른 화면</h2><div class="row wrapx">
+      <a href="/kds" target="_blank"><button>🧾 주문 화면 (카운터)</button></a><a href="/staff" target="_blank"><button>⏰ 직원 출퇴근 화면</button></a><a href="/" target="_blank"><button>📱 손님 메뉴판</button></a></div>`;
+};
+
+R.dashboard = async () => {
+  const d = await g('dashboard');
+  const wd = '일월화수목금토';
+  return `<div class="grid2" style="margin-top:12px">
       <div class="card"><b>일별 매출 (최근 30일)</b>${bars(d.daily.slice().reverse().map(r => ({...r, k: r.k.slice(5)})), 'k', 'amt')}</div>
       <div class="card"><b>월별 매출</b>${bars(d.monthly.slice().reverse(), 'k', 'amt')}</div>
       <div class="card"><b>인기 메뉴 TOP 15</b> <span class="muted">${d.frm} ~ ${d.to}</span>${bars(d.popular, 'name', 'qty', v => n(v) + '개')}</div>
@@ -99,10 +124,10 @@ R.orders = async (day = today()) => {
   const d = await g('orders', '?day=' + day);
   const ok = d.rows.filter(o => !['canceled', 'pending_payment'].includes(o.status));
   setTimeout(() => {
-    $('#od').onchange = async e => { $('#view').innerHTML = await R.orders(e.target.value); bind(); };
+    $('#od').onchange = async e => { $('#pane').innerHTML = await R.orders(e.target.value); bind(); };
     document.querySelectorAll('[data-cancel]').forEach(b => b.onclick = async () => {
       if (!confirm('이 주문을 취소할까요? (재고·포인트 되돌림. 카드 결제는 토스페이먼츠에서 따로 환불)')) return;
-      await post('order_cancel', {id: +b.dataset.cancel}); $('#view').innerHTML = await R.orders(day); bind();
+      await post('order_cancel', {id: +b.dataset.cancel}); $('#pane').innerHTML = await R.orders(day); bind();
     });
   });
   return `<h2>주문 내역</h2><div class="row noprint"><input type="date" id="od" value="${day}" style="max-width:200px"><span class="muted">${ok.length}건 · ${won(ok.reduce((s, o) => s + o.total, 0))}</span></div>
@@ -256,9 +281,9 @@ function recipeForm(r) {
 R.production = async (day = today()) => {
   const d = await g('production', '?day=' + day);
   setTimeout(() => {
-    $('#pd').onchange = async e => { $('#view').innerHTML = await R.production(e.target.value); bind(); };
-    $('#psv').onclick = async () => { try { await post('production_save', {day, ...form($('#pf'))}); $('#view').innerHTML = await R.production(day); bind(); toast('기록했어요'); } catch (e) { toast(e.message); } };
-    document.querySelectorAll('[data-pdel]').forEach(b => b.onclick = async () => { if (confirm('기록을 지울까요? (남은 개수·재료 되돌림)')) { await post('production_delete', {id: +b.dataset.pdel, day}); $('#view').innerHTML = await R.production(day); bind(); } });
+    $('#pd').onchange = async e => { $('#pane').innerHTML = await R.production(e.target.value); bind(); };
+    $('#psv').onclick = async () => { try { await post('production_save', {day, ...form($('#pf'))}); $('#pane').innerHTML = await R.production(day); bind(); toast('기록했어요'); } catch (e) { toast(e.message); } };
+    document.querySelectorAll('[data-pdel]').forEach(b => b.onclick = async () => { if (confirm('기록을 지울까요? (남은 개수·재료 되돌림)')) { await post('production_delete', {id: +b.dataset.pdel, day}); $('#pane').innerHTML = await R.production(day); bind(); } });
   });
   return `<h2>베이킹 생산일지</h2><p class="muted">구운 개수를 넣으면 메뉴 '남은 개수'가 늘고 레시피 재료가 차감돼요. 마감 때 남은 걸 버리면 폐기에 넣어 주세요. 판매량은 주문에서 자동 계산.</p>
     <div class="row noprint"><input type="date" id="pd" value="${day}" style="max-width:200px"></div>
@@ -284,7 +309,7 @@ R.purchase = async () => {
 R.attendance = async (month = today().slice(0, 7)) => {
   const [d, st] = await Promise.all([g('attendance', '?month=' + month), g('staff')]); D.staff = st.rows; D.att = d.rows;
   setTimeout(() => {
-    $('#am').onchange = async e => { $('#view').innerHTML = await R.attendance(e.target.value); bind(); };
+    $('#am').onchange = async e => { $('#pane').innerHTML = await R.attendance(e.target.value); bind(); };
     $('#aadd').onclick = () => attForm({}, month);
     document.querySelectorAll('[data-att]').forEach(b => b.onclick = () => attForm(D.att.find(a => a.id == b.dataset.att), month));
   });
@@ -317,7 +342,7 @@ R.staff = async () => {
   return `<h2>직원</h2><p class="muted">직원마다 숫자 PIN(4~6자리)을 정해 주세요. PIN 은 암호화해서 저장돼서 사장님도 다시 볼 수 없어요 — 잊으면 새로 정해 주세요. PIN 으로 출퇴근·체크리스트·주문 화면을 써요.</p>
     <button class="primary" id="sadd">+ 직원 추가</button>
     <div class="card tbl"><table><tr><th>이름</th><th class="r">시급</th><th>상태</th><th></th></tr>
-    ${d.rows.map(s => `<tr style="${s.active ? '' : 'opacity:.45'}"><td>${esc(s.name)}</td><td class="r">${n(s.wage)}원</td><td>${s.active ? '근무' : '퇴사'}</td><td><button class="sm" data-st="${s.id}">수정</button></td></tr>`).join('') || '<tr><td class="muted">직원을 추가해 주세요</td></tr>'}</table></div>`;
+    ${d.rows.map(s => `<tr style="${s.active ? '' : 'opacity:.45'}"><td>${esc(s.name)}</td><td class="r">${n(s.wage)}원</td><td>${s.active ? '근무' : '퇴사'}</td><td><button class="sm primary" data-st="${s.id}">수정 · PIN 변경</button></td></tr>`).join('') || '<tr><td class="muted">직원을 추가해 주세요</td></tr>'}</table></div>`;
 };
 function staffForm(s) {
   const md = modal(`<h3 style="margin-top:0">${s.id ? '직원 수정' : '직원 추가'}</h3><div id="f">
@@ -332,7 +357,7 @@ function staffForm(s) {
 R.checklist = async (day = today()) => {
   const d = await g('checklist', '?day=' + day);
   setTimeout(() => {
-    $('#cd').onchange = async e => { $('#view').innerHTML = await R.checklist(e.target.value); bind(); };
+    $('#cd').onchange = async e => { $('#pane').innerHTML = await R.checklist(e.target.value); bind(); };
     document.querySelectorAll('[data-cadd]').forEach(b => b.onclick = async () => {
       const t = prompt((b.dataset.cadd === 'open' ? '오픈' : '마감') + ' 업무 추가'); if (t) { await post('checklist_save', {kind: b.dataset.cadd, text: t}); go('checklist'); }
     });
@@ -421,13 +446,20 @@ R.settings = async () => {
 
 function bind() {}
 async function go(t) {
+  if (!R[t]) t = 'home';
   tab = t; if (location.hash.slice(1) !== t) history.replaceState(null, '', '#' + t);
-  $('#nav').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
-  try { $('#view').innerHTML = await (R[t] || R.dashboard)(); }
-  catch (e) { if (e.status === 401) return showLogin(); $('#view').innerHTML = `<div class="card empty">${esc(e.message)}</div>`; }
+  const G = groupOf(t);
+  $('#nav').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.g === G[0]));
+  const sub = G[3].length > 1 ? `<div class="subtabs noprint">${G[3].map(([k, v]) => `<button data-t="${k}" class="${k === t ? 'on' : ''}">${v}</button>`).join('')}</div>` : '';
+  try {
+    const html = await R[t]();
+    $('#view').innerHTML = sub + `<div id="pane">${html}</div>`;
+    $('#view').querySelectorAll('.subtabs button').forEach(b => b.onclick = () => go(b.dataset.t));
+  }
+  catch (e) { if (e.status === 401) return showLogin(); $('#view').innerHTML = sub + `<div class="card empty">${esc(e.message)}</div>`; }
 }
 function showLogin() { $('#login').hidden = false; $('#main').hidden = true; $('#logout').hidden = true; $('#pw').focus(); }
-$('#nav').innerHTML = TABS.map(([k, v]) => `<button data-t="${k}">${v}</button>`).join('');
+$('#nav').innerHTML = GROUPS.map(([k, i, v, tabs]) => `<button data-g="${k}" data-t="${tabs[0][0]}"><i>${i}</i>${v}</button>`).join('');
 $('#nav').querySelectorAll('button').forEach(b => b.onclick = () => { go(b.dataset.t); window.scrollTo(0, 0); });
 window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if (t && t !== tab) go(t); });
 $('#lf').onsubmit = async e => {
