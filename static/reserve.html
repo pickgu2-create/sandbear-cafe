@@ -19,8 +19,8 @@
 .times{display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:8px}
 .times button{background:var(--card);border:1px solid var(--line);font-weight:600}
 .times button.on{background:var(--brand);color:#fff;border-color:var(--brand)}
-.bar{position:fixed;left:0;right:0;bottom:0;padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 30%);z-index:10}
-.bar button{width:100%;max-width:728px;display:block;margin:0 auto;padding:15px;font-size:16px;border-radius:16px}
+.resv-bar{position:fixed;left:0;right:0;bottom:0;padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 30%);z-index:10}
+.resv-bar button{width:100%;max-width:728px;display:block;margin:0 auto;padding:15px;font-size:16px;border-radius:16px}
 .done{text-align:center;padding:30px 10px}
 .done .big{font-size:60px}
 </style>
@@ -31,7 +31,7 @@
   <span class="grow"></span><a href="/" class="muted">메뉴판</a>
 </div></header>
 <main class="wrap" id="app"><div class="empty">불러오는 중…</div></main>
-<div class="bar" id="bar" hidden><button class="primary" id="go" disabled></button></div>
+<div class="resv-bar" id="bar" hidden><button class="primary" id="go" disabled></button></div>
 <script src="/common.js"></script>
 <script>
 let I, sel = {}, day = '', time = '';
