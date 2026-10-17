@@ -248,7 +248,7 @@ function more() {
     ${mine.length ? `<div class="card"><b>오늘 내 주문</b>${mine.map(o => `<div><a href="/?o=${esc(o.token)}">주문 보기 · ${new Date(o.at).toTimeString().slice(0, 5)}</a></div>`).join('')}</div>` : ''}
     <div class="card"><b>🎂 예약 주문 (홀케이크 등)</b>
       <label>이름</label><input id="rn" maxlength="20"><label>연락처</label><input id="rp" inputmode="tel" placeholder="010-0000-0000">
-      <label>메뉴 · 요청 (예: 바스크 치즈케이크 1호, 레터링 "생일 축하해")</label><input id="ri" maxlength="60">
+      <label>메뉴 (예: 바스크 치즈케이크 1호)</label><input id="ri" maxlength="60">
       <div class="row"><div class="grow"><label>개수</label><input id="rq" type="number" min="1" value="1"></div><div class="grow"><label>픽업 날짜·시간</label><input id="rt" type="datetime-local"></div></div>
       <label>메모</label><input id="rm" maxlength="200">
       <button class="primary" id="rs" style="width:100%;margin-top:10px">예약 신청</button>
