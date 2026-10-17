@@ -41,6 +41,22 @@
 .stars button{background:none;padding:0 2px;font-size:26px;color:#d9c9b4}
 .stars button.on{color:#f0a500}
 .bottom-space{height:110px}
+/* 메인 위쪽: 예약 배너 + 포인트 타일 + 진행 중 주문 */
+.quick{display:grid;grid-template-columns:1fr 104px;gap:10px;margin-top:14px}
+.resv-banner{position:relative;display:block;overflow:hidden;text-decoration:none;color:#fff;border-radius:18px;padding:16px 16px 14px;
+  background:linear-gradient(135deg,#8b5a2b 0%,#b97c45 100%);box-shadow:0 6px 16px rgba(139,90,43,.25)}
+.resv-banner b{display:block;font-size:clamp(15px,4.4vw,17px);white-space:nowrap;position:relative;z-index:1}
+.resv-banner span,.resv-banner em{position:relative;z-index:1}
+.resv-banner span{display:block;font-size:13px;opacity:.9;margin-top:3px}
+.resv-banner em{font-style:normal;display:inline-block;margin-top:10px;background:rgba(255,255,255,.22);border-radius:99px;padding:4px 11px;font-size:13px;font-weight:700}
+.resv-banner .cake{position:absolute;right:-6px;bottom:-10px;font-size:clamp(46px,15vw,64px);opacity:.9;transform:rotate(-8deg)}
+.pts-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:18px;font-weight:700;padding:10px 4px}
+.pts-tile i{font-style:normal;font-size:30px}
+.pts-tile span{font-size:12px;color:var(--sub);font-weight:500}
+.live{display:flex;align-items:center;gap:10px;margin-top:12px;padding:12px 14px;border-radius:14px;background:var(--card);border:1px solid var(--line);text-decoration:none;color:var(--ink);font-weight:700}
+.live.ready{background:var(--ok);border-color:var(--ok);color:#fff;animation:pulse 1.2s ease-in-out infinite}
+.live small{font-weight:400;color:inherit;opacity:.75}
+.notice{margin-top:12px;padding:10px 14px;border-radius:14px;background:#fff6e5;border:1px solid #f1dfb8;font-size:14px}
 </style>
 </head>
 <body>
@@ -71,13 +87,17 @@ async function load() {
 function drawMenu() {
   const app = $('#app');
   app.innerHTML = `<div class="hero"><h1>무엇을 드릴까요? 🐻</h1>
-    <div class="row wrapx" style="margin-top:10px"><a href="/reserve"><button class="primary">🎂 케이크 · 디저트 예약</button></a>
-      <button id="btnMore">🎁 내 포인트${JSON.parse(localStorage.getItem('sb_orders') || '[]').some(o => o.at > Date.now() - 86400e3) ? ' · 📝 내 주문' : ''}</button></div>
-    ${M.notice ? `<div class="card" style="margin:10px 0 0">📢 ${esc(M.notice)}</div>` : ''}</div>
+    ${M.notice ? `<div class="notice">📢 ${esc(M.notice)}</div>` : ''}
+    <div id="live"></div>
+    <div class="quick">
+      <a class="resv-banner" href="/reserve"><b>케이크·디저트 예약</b><span>원하는 날 미리 예약하고<br>편하게 픽업하세요</span><em>예약하기 ›</em><i class="cake">🎂</i></a>
+      <button class="pts-tile" id="btnMore"><i>🎁</i>포인트<span>${myOrders().length ? '내 주문 보기' : '조회하기'}</span></button>
+    </div></div>
     <nav class="cats">${M.cats.map(c => `<button data-c="${esc(c)}">${esc(c)}</button>`).join('')}</nav>
     ${M.cats.map(c => `<section class="sec" id="c-${esc(c)}"><h2>${esc(c)}</h2>${M.items.filter(i => i.cat === c).map(itemHtml).join('')}</section>`).join('')}
     <div class="bottom-space"></div>`;
   $('#btnMore').onclick = more;
+  liveOrder();
   app.querySelectorAll('.cats button').forEach(b => b.onclick = () => {
     const s = document.getElementById('c-' + b.dataset.c); window.scrollTo({top: s.offsetTop - 110, behavior: 'smooth'});
   });
@@ -243,11 +263,23 @@ function review(token, o) {
   };
 }
 
+function myOrders() { try { return JSON.parse(localStorage.getItem('sb_orders') || '[]').filter(o => o.at > Date.now() - 86400e3); } catch (e) { return []; } }
+// 오늘 진행 중인 내 주문이 있으면 메뉴 위에 한 줄로 (완료되면 초록색)
+async function liveOrder() {
+  const o = myOrders()[0]; if (!o) return;
+  try {
+    const r = await api('/api/order/' + o.token);
+    if (!['new', 'making', 'ready'].includes(r.status) || !$('#live')) return;
+    const t = {new: ['📝', '주문 접수됐어요'], making: ['☕', '만들고 있어요'], ready: ['🔔', '준비됐어요! 카운터에서 픽업해 주세요']}[r.status];
+    $('#live').innerHTML = `<a class="live ${r.status === 'ready' ? 'ready' : ''}" href="/?o=${encodeURIComponent(o.token)}"><span style="font-size:22px">${t[0]}</span>
+      <span class="grow">주문 #${r.no} · ${t[1]}<br><small>눌러서 주문 보기</small></span><span>›</span></a>`;
+  } catch (e) {}
+}
 function more() {
-  const mine = JSON.parse(localStorage.getItem('sb_orders') || '[]').filter(o => o.at > Date.now() - 86400e3);
-  const m = modal(`<h3 style="margin-top:0">내 포인트 · 주문</h3>
-    ${mine.length ? `<div class="card"><b>오늘 내 주문</b>${mine.map(o => `<div><a href="/?o=${esc(o.token)}">주문 보기 · ${new Date(o.at).toTimeString().slice(0, 5)}</a></div>`).join('')}</div>` : ''}
-    <div class="card"><b>🎁 내 포인트</b><div class="row" style="margin-top:8px"><input id="pp" inputmode="tel" placeholder="010-0000-0000" value="${esc(localStorage.getItem('sb_phone') || '')}"><button id="pc">조회</button></div><div id="pr" style="margin-top:6px"></div></div>`);
+  const mine = myOrders();
+  const m = modal(`<h3 style="margin-top:0">🎁 포인트 · 내 주문</h3>
+        <div class="card"><b>내 포인트</b> <span class="muted">· 결제 금액의 ${M.points_rate}% 적립</span><div class="row" style="margin-top:8px"><input id="pp" inputmode="tel" placeholder="010-0000-0000" value="${esc(localStorage.getItem('sb_phone') || '')}"><button id="pc" style="white-space:nowrap">조회</button></div><div id="pr" style="margin-top:6px"></div></div>
+    ${mine.length ? `<div class="card"><b>오늘 내 주문</b>${mine.map(o => `<a class="row" style="padding:10px 0;border-bottom:1px solid var(--line);text-decoration:none;color:var(--ink)" href="/?o=${esc(o.token)}"><span class="grow">📝 ${new Date(o.at).toTimeString().slice(0, 5)} 주문</span><span class="muted">보기 ›</span></a>`).join('')}</div>` : ''}`);
   $('#pc', m).onclick = async () => {
     try { const r = await api('/api/points?phone=' + encodeURIComponent($('#pp', m).value)); $('#pr', m).innerHTML = `<b>${r.points.toLocaleString()}P</b> <span class="muted">· 방문 ${r.visits}번</span>`; }
     catch (e) { toast(e.message); }
