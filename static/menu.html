@@ -290,18 +290,37 @@ $('#btnCart').onclick = openCart;
 // 관리자: 직원 화면 2개 + 사장님(비밀번호)
 async function adminSheet() {
   let me = {}; try { me = await api('/api/me'); } catch (e) {}
-  const m = modal(`<h3 style="margin-top:0">관리자</h3>
-    <div class="card"><b>👩‍🍳 직원</b><div class="row wrapx" style="margin-top:8px">
-      <a href="/staff"><button>⏰ 출퇴근 · 체크리스트</button></a><a href="/kds"><button>🧾 주문 화면</button></a></div>
-      <div class="muted" style="margin-top:6px">본인 PIN 으로 들어가요</div></div>
-    <div class="card"><b>🔒 사장님</b>
-      ${me.role === 'owner' ? '<a href="/admin"><button class="primary" style="width:100%;margin-top:8px">사장님 화면 열기</button></a>'
-        : `<form id="af" style="margin-top:8px"><input type="password" id="apw" placeholder="사장님 비밀번호" autocomplete="current-password"><button class="primary" style="width:100%;margin-top:8px">들어가기</button></form>`}</div>`);
-  const f = $('#af', m);
-  if (f) f.onsubmit = async e => {
-    e.preventDefault();
-    try { await api('/api/admin/login', {password: $('#apw', m).value}); location.href = '/admin'; } catch (er) { toast(er.message, 3000); }
+  const m = modal('<div id="adm"></div>'), box = $('#adm', m);
+  // 로그인된 뒤: 갈 화면 고르기
+  const menu = who => {
+    box.innerHTML = `<h3 style="margin-top:0">관리자 <span class="muted" style="font-weight:400">· ${esc(who)}</span></h3>
+      <div style="display:grid;gap:8px"><a href="/kds"><button class="primary" style="width:100%;padding:14px">🧾 주문 화면</button></a>
+        <a href="/staff"><button style="width:100%;padding:14px">⏰ 출퇴근 · 체크리스트</button></a></div>
+      ${me.role === 'owner' ? '<a href="/admin"><button class="primary" style="width:100%;margin-top:8px;padding:14px">🔒 사장님 화면</button></a>' : ''}
+      <div class="row" style="margin-top:12px"><span class="grow"></span><button class="sm ghost" id="lo">로그아웃</button></div>`;
+    $('#lo', box).onclick = async () => { await api(me.role === 'owner' ? '/api/admin/logout' : '/api/staff/logout', {}).catch(() => {}); me = {}; pin(); };
   };
+  // 처음: PIN 입력판 (사장님은 아래 '비밀번호로 들어가기')
+  const pin = () => {
+    box.innerHTML = `<h3 style="margin:0;text-align:center">관리자</h3><div class="muted" style="text-align:center">본인 PIN 을 눌러 주세요</div><div id="pp"></div>
+      <div style="text-align:center"><button class="sm ghost" id="pwb">🔒 사장님 비밀번호로 들어가기</button></div>`;
+    const pad = pinPad($('#pp', box), 6, async v => {
+      try { const r = await api('/api/staff/login', {pin: v}); me = {role: 'staff', name: r.name}; menu(r.name + '님'); }
+      catch (e) { toast(e.message, 3000); pad.clear(); }
+    });
+    $('#pwb', box).onclick = () => {
+      box.innerHTML = `<h3 style="margin-top:0">🔒 사장님</h3><form id="af"><input type="password" id="apw" placeholder="사장님 비밀번호" autocomplete="current-password">
+        <button class="primary" style="width:100%;margin-top:8px">들어가기</button></form>
+        <div style="text-align:center;margin-top:10px"><button class="sm ghost" id="back">← PIN 으로</button></div>`;
+      $('#apw', box).focus();
+      $('#back', box).onclick = pin;
+      $('#af', box).onsubmit = async e => {
+        e.preventDefault();
+        try { await api('/api/admin/login', {password: $('#apw', box).value}); location.href = '/admin'; } catch (er) { toast(er.message, 3000); }
+      };
+    };
+  };
+  if (me.role) menu(me.name || ''); else pin();
 }
 $('#btnAdmin').onclick = adminSheet;
 (async () => {
