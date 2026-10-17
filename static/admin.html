@@ -37,6 +37,7 @@ h2{font-size:19px;margin:16px 0 6px}
 <body>
 <header class="hd"><div class="wrap" style="max-width:1200px">
   <a class="logo" href="/admin"><img src="/icon.svg" alt="">사장님 화면</a><span class="grow"></span>
+  <a href="/staff" target="_blank" class="muted">출퇴근</a>
   <a href="/kds" target="_blank" class="muted">주문 화면</a>
   <a href="/" target="_blank" class="muted">메뉴판</a>
   <button class="sm ghost" id="logout" hidden>로그아웃</button>
@@ -74,7 +75,11 @@ R.dashboard = async () => {
   const d = await g('dashboard');
   const diff = d.yesterday.amt ? Math.round((d.today.amt / d.yesterday.amt - 1) * 100) : null;
   const wd = '일월화수목금토';
-  return `<h2>오늘</h2><div class="kpis">
+  return `<div class="card"><b>바로 가기</b><div class="row wrapx" style="margin-top:8px">
+      <a href="#ingredients"><button>🧈 재료 재고 수정</button></a><a href="#menu"><button>☕ 메뉴 이름·가격 수정</button></a>
+      <a href="#production"><button>🥐 오늘 생산 기록</button></a><a href="#attendance"><button>⏰ 직원 출퇴근</button></a>
+      <a href="#staff"><button>👩‍🍳 직원 등록·PIN</button></a><a href="#qr"><button>🔳 QR 인쇄</button></a></div></div>
+    <h2>오늘</h2><div class="kpis">
     <div class="kpi"><span class="muted">오늘 매출</span><b>${won(d.today.amt)}</b><span class="muted">${d.today.n}건 ${diff === null ? '' : `· 어제보다 ${diff >= 0 ? '+' : ''}${diff}%`}</span></div>
     <div class="kpi"><span class="muted">이번 달</span><b>${won(d.month.amt)}</b><span class="muted">${d.month.n}건</span></div>
     <div class="kpi"><span class="muted">객단가 (오늘)</span><b>${won(d.today.n ? d.today.amt / d.today.n : 0)}</b></div>
@@ -121,7 +126,7 @@ R.menu = async () => {
     <div class="card tbl"><table><tr><th>분류</th><th>메뉴</th><th class="r">가격</th><th>남은 개수</th><th>품절</th><th></th></tr>
     ${D.menu.map(m => `<tr style="${m.active ? '' : 'opacity:.45'}"><td>${esc(m.cat)}</td><td>${esc(m.emoji)} ${esc(m.name)}${m.active ? '' : ' <span class="tag">숨김</span>'}${m.auto_soldout === 'stock' ? ' <span class="tag bad">자동품절·개수0</span>' : m.auto_soldout === 'ingredient' ? ' <span class="tag bad">자동품절·재료부족</span>' : ''}</td>
       <td class="r">${n(m.price)}</td><td>${m.stock === null ? '<span class="muted">레시피</span>' : n(m.stock) + '개'}</td>
-      <td><input type="checkbox" data-so="${m.id}" ${m.soldout ? 'checked' : ''} style="width:22px;height:22px"></td><td><button class="sm" data-edit="${m.id}">수정</button></td></tr>`).join('')}</table></div>`;
+      <td><input type="checkbox" data-so="${m.id}" ${m.soldout ? 'checked' : ''} style="width:22px;height:22px"></td><td><button class="sm primary" data-edit="${m.id}">이름·가격·옵션 수정</button></td></tr>`).join('')}</table></div>`;
 };
 function menuForm(m) {
   const md = modal(`<h3 style="margin-top:0">${m.id ? '메뉴 수정' : '메뉴 추가'}</h3><div id="f">
@@ -148,17 +153,18 @@ R.ingredients = async () => {
     document.querySelectorAll('[data-ie]').forEach(b => b.onclick = () => ingForm(D.ing.find(i => i.id == b.dataset.ie)));
     document.querySelectorAll('[data-in]').forEach(b => b.onclick = () => lotForm(D.ing.find(i => i.id == b.dataset.in)));
     document.querySelectorAll('[data-lot]').forEach(b => b.onclick = () => lotEdit(+b.dataset.lot));
+    document.querySelectorAll('[data-is]').forEach(b => b.onclick = () => stockForm(D.ing.find(i => i.id == b.dataset.is)));
     $('#isr').oninput = e => document.querySelectorAll('#itbl tr[data-n]').forEach(tr => tr.hidden = !tr.dataset.n.includes(e.target.value));
   });
   return `<h2>재료 · 재고 · 유통기한</h2>
-    <p class="muted">재료를 등록하고, 들어올 때마다 <b>입고</b>(수량·유통기한·금액)를 넣어요. 재고 조사 때는 유통기한 줄을 눌러 실제 남은 수량으로 고치면 돼요. 사용은 유통기한 빠른 것부터 자동 차감. 유통기한 ${esc(d.expiry_days)}일 이내는 노랑, 지난 건 빨강.</p>
+    <p class="muted">재료를 등록하고, 들어올 때마다 <b>입고</b>(수량·유통기한·금액)를 넣어요. 남은 양이 실제와 다르면 <b>재고 수정</b>으로 고치세요. 이름·단위·최소 재고는 <b>정보 수정</b>. 사용은 유통기한 빠른 것부터 자동 차감. 유통기한 ${esc(d.expiry_days)}일 이내는 노랑, 지난 건 빨강.</p>
     <div class="row noprint"><button class="primary" id="addi">+ 재료 등록</button><input id="isr" placeholder="재료 검색" style="max-width:220px"></div>
     <div class="card tbl"><table id="itbl"><tr><th>재료</th><th class="r">현재 재고</th><th class="r">최소</th><th>유통기한별 수량 (눌러서 수정)</th><th class="r">단위 원가</th><th></th></tr>
     ${D.ing.map(i => `<tr data-n="${esc(i.name)}"><td><b>${esc(i.name)}</b>${i.low ? ' <span class="tag bad">부족</span>' : ''}${i.supplier ? `<div class="muted">${esc(i.supplier)}</div>` : ''}</td>
       <td class="r"><b>${n(i.qty)}</b>${esc(i.unit)}</td><td class="r">${n(i.min_qty)}</td>
       <td>${i.lots.map(l => `<div class="lot ${l.state}" data-lot="${l.id}" style="cursor:pointer">${n(l.qty)}${esc(i.unit)} · ${l.expiry ? '~' + l.expiry : '기한 없음'}${l.state === 'expired' ? ' ⛔지남' : l.state === 'soon' ? ' ⏳임박' : ''}</div>`).join('') || '<span class="muted">재고 없음</span>'}</td>
       <td class="r">${i.unit_cost ? n(Math.round(i.unit_cost * 100) / 100) + '원/' + esc(i.unit) : '<span class="muted">-</span>'}</td>
-      <td style="white-space:nowrap"><button class="sm ok" data-in="${i.id}">입고</button> <button class="sm" data-ie="${i.id}">수정</button></td></tr>`).join('')}</table>
+      <td style="white-space:nowrap"><button class="sm ok" data-in="${i.id}">입고</button> <button class="sm primary" data-is="${i.id}">재고 수정</button> <button class="sm" data-ie="${i.id}">정보 수정</button></td></tr>`).join('')}</table>
     ${D.ing.length ? '' : '<div class="empty">재료를 등록해 주세요 (예: 버터 · g · 최소 1000)</div>'}</div>`;
 };
 function ingForm(i) {
@@ -174,6 +180,28 @@ function ingForm(i) {
     <div class="row" style="margin-top:14px">${i.id ? '<button class="danger" id="del">삭제</button>' : ''}<span class="grow"></span><button class="primary" id="sv">저장</button></div>`);
   $('#sv', md).onclick = async () => { try { await post('ing_save', {id: i.id, ...form($('#f', md))}); md.remove(); go('ingredients'); } catch (e) { toast(e.message); } };
   if (i.id) $('#del', md).onclick = async () => { if (confirm(`${i.name} 을(를) 삭제할까요? (레시피에서도 빠져요)`)) { await post('ing_delete', {id: i.id}); md.remove(); go('ingredients'); } };
+}
+// 재고 조사: 유통기한별 수량을 한 번에 고치기 (0 으로 하면 그 묶음은 사라짐)
+function stockForm(i) {
+  const md = modal(`<h3 style="margin-top:0">${esc(i.name)} — 재고 수정</h3>
+    <p class="muted">실제로 세어 본 수량과 유통기한으로 고치고 저장하세요. 다 쓴 묶음은 0 으로.</p>
+    <div id="ls">${i.lots.map(l => `<div class="row" style="margin:6px 0" data-id="${l.id}">
+      <input type="number" step="any" value="${l.qty}" style="width:110px"><span>${esc(i.unit)}</span>
+      <input type="date" value="${l.expiry || ''}" class="grow"></div>`).join('') || '<div class="muted">남은 재고가 없어요</div>'}</div>
+    <div class="row" style="margin:6px 0" id="nw"><input type="number" step="any" placeholder="새로 추가 수량" style="width:110px"><span>${esc(i.unit)}</span><input type="date" class="grow"></div>
+    <button class="primary" id="sv" style="width:100%;margin-top:12px">저장</button>`);
+  $('#sv', md).onclick = async () => {
+    try {
+      for (const r of md.querySelectorAll('#ls [data-id]')) {
+        const [q, e] = r.querySelectorAll('input');
+        if (q.value === '' || +q.value <= 0) await post('lot_delete', {id: +r.dataset.id});
+        else await post('lot_update', {id: +r.dataset.id, qty: q.value, expiry: e.value});
+      }
+      const [nq, ne] = md.querySelectorAll('#nw input');
+      if (+nq.value > 0) await post('lot_add', {ing_id: i.id, qty: nq.value, expiry: ne.value, memo: '재고 조사'});
+      md.remove(); go('ingredients'); toast('재고를 고쳤어요');
+    } catch (e) { toast(e.message); }
+  };
 }
 function lotForm(i) {
   const md = modal(`<h3 style="margin-top:0">${esc(i.name)} 입고</h3><div id="f">

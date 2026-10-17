@@ -74,6 +74,8 @@ function drawMenu() {
     ${M.notice ? `<div class="card" style="margin:10px 0 0">📢 ${esc(M.notice)}</div>` : ''}</div>
     <nav class="cats">${M.cats.map(c => `<button data-c="${esc(c)}">${esc(c)}</button>`).join('')}</nav>
     ${M.cats.map(c => `<section class="sec" id="c-${esc(c)}"><h2>${esc(c)}</h2>${M.items.filter(i => i.cat === c).map(itemHtml).join('')}</section>`).join('')}
+    <footer class="muted" style="text-align:center;margin:28px 0 0;font-size:13px">
+      <a href="/staff">직원 출퇴근</a> · <a href="/kds">주문 화면</a> · <a href="/admin">사장님</a></footer>
     <div class="bottom-space"></div>`;
   app.querySelectorAll('.cats button').forEach(b => b.onclick = () => {
     const s = document.getElementById('c-' + b.dataset.c); window.scrollTo({top: s.offsetTop - 110, behavior: 'smooth'});
@@ -251,6 +253,8 @@ function more() {
       <label>메모</label><input id="rm" maxlength="200">
       <button class="primary" id="rs" style="width:100%;margin-top:10px">예약 신청</button>
       <div class="muted" style="margin-top:6px">사장님이 확인 후 연락드려요.</div></div>
+    <div class="card"><b>🐻 직원 · 사장님</b><div class="row wrapx" style="margin-top:8px">
+      <a href="/staff"><button>⏰ 출퇴근 · 체크리스트</button></a><a href="/kds"><button>🧾 주문 화면</button></a><a href="/admin"><button class="primary">🔒 사장님 화면</button></a></div></div>
     <div class="card"><b>🎁 내 포인트</b><div class="row" style="margin-top:8px"><input id="pp" inputmode="tel" placeholder="010-0000-0000" value="${esc(localStorage.getItem('sb_phone') || '')}"><button id="pc">조회</button></div><div id="pr" style="margin-top:6px"></div></div>`);
   $('#rs', m).onclick = async () => {
     try { await api('/api/reservation', {name: $('#rn', m).value, phone: $('#rp', m).value, item: $('#ri', m).value, qty: $('#rq', m).value, pickup: $('#rt', m).value, memo: $('#rm', m).value}); m.remove(); toast('예약 신청 완료! 확인 후 연락드릴게요', 3500); }
