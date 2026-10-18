@@ -12,12 +12,14 @@
 .step i{font-style:normal;width:26px;height:26px;border-radius:50%;background:var(--brand);color:#fff;font-size:14px;display:flex;align-items:center;justify-content:center}
 .pick{display:flex;gap:12px;align-items:center;padding:12px;background:var(--card);border:2px solid var(--line);border-radius:16px;margin:8px 0}
 .pick.on{border-color:var(--brand);background:#fff8ef}
+.pick .grow{min-width:0}
+@media(max-width:360px){.pick{gap:8px;padding:10px}.pick .em{width:42px!important;height:42px!important;font-size:22px!important}.qty{gap:6px}.qty button{width:32px!important;height:32px!important}}
 .pick .em{width:54px;height:54px;border-radius:14px;background:var(--soft);display:flex;align-items:center;justify-content:center;font-size:28px;flex:none}
 .qty{display:flex;align-items:center;gap:10px}
 .qty button{width:36px;height:36px;padding:0;border-radius:50%;font-size:20px}
 .qty b{min-width:18px;text-align:center}
-.times{display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:8px}
-.times button{background:var(--card);border:1px solid var(--line);font-weight:600}
+.times{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px}
+.times button{padding:10px 0;white-space:nowrap;font-size:15px;background:var(--card);border:1px solid var(--line);font-weight:600}
 .times button.on{background:var(--brand);color:#fff;border-color:var(--brand)}
 .resv-bar{position:fixed;left:0;right:0;bottom:0;padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 30%);z-index:10}
 .resv-bar button{width:100%;max-width:728px;display:block;margin:0 auto;padding:15px;font-size:16px;border-radius:16px}

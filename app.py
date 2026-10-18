@@ -239,7 +239,8 @@ def api_menu(h, d):
         if it["cat"] not in cats: cats.append(it["cat"])
     rv = {r["menu_id"]: (round(r["a"], 1), r["n"]) for r in q("SELECT menu_id, AVG(rating) a, COUNT(*) n FROM reviews GROUP BY menu_id")}
     for it in items: it["rating"] = rv.get(it["id"])
-    return dict(cafe=setting("cafe_name", "샌드베어"), notice=setting("notice"), cats=cats, items=items,
+    wifi = dict(ssid=setting("wifi_ssid"), pw=setting("wifi_pw")) if setting("wifi_show", "1") == "1" and setting("wifi_ssid") else None
+    return dict(cafe=setting("cafe_name", "샌드베어"), notice=setting("notice"), cats=cats, items=items, wifi=wifi,
                 toss=TOSS_CK or None, points_rate=float(setting("points_rate", "0") or 0))
 
 def api_order(h, d):
@@ -624,7 +625,8 @@ def owner_get(h, d, sec):
         for r in rows: r["items"] = q("SELECT name, opts, unit_price, qty FROM order_items WHERE order_id=?", r["id"])
         return 200, {"day": day, "rows": rows}
     if sec == "settings":
-        return 200, dict(cafe_name=setting("cafe_name"), notice=setting("notice"), points_rate=setting("points_rate"), tables=setting("tables", "10"),
+        return 200, dict(wifi_ssid=setting("wifi_ssid"), wifi_pw=setting("wifi_pw"), wifi_show=setting("wifi_show", "1"),
+                         cafe_name=setting("cafe_name"), notice=setting("notice"), points_rate=setting("points_rate"), tables=setting("tables", "10"),
                          expiry_days=setting("expiry_days", "3"), toss=bool(TOSS_CK and TOSS_SK),
                          resv_hours=setting("resv_hours", "11:00-19:00"), resv_min_days=setting("resv_min_days", "1"),
                          resv_closed=setting("resv_closed", "화"), resv_notice=setting("resv_notice"), **{"cal": resv_conf()})
@@ -753,7 +755,7 @@ def owner_post(h, d, act):
         set_setting(k, ",".join(sorted(keep)))
         return 200, {"cal": resv_conf()}
     if act == "settings":
-        for k in ("cafe_name", "notice", "points_rate", "tables", "expiry_days", "resv_hours", "resv_min_days", "resv_closed", "resv_notice"):
+        for k in ("wifi_ssid", "wifi_pw", "wifi_show", "cafe_name", "notice", "points_rate", "tables", "expiry_days", "resv_hours", "resv_min_days", "resv_closed", "resv_notice"):
             if k in d: set_setting(k, str(d[k])[:300])
         if d.get("new_password"):
             if len(d["new_password"]) < 6: return 400, {"error": "비밀번호는 6자 이상"}

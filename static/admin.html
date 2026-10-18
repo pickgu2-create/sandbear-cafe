@@ -43,6 +43,9 @@ main.body{flex:1;min-width:0;padding:4px 16px 40px}
 .qrs{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
 .qr{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px;text-align:center;break-inside:avoid}
 .qr .box{display:flex;justify-content:center;margin:8px 0}
+.qr .wf{margin-top:6px;padding-top:6px;border-top:1px dashed var(--line);font-size:12px}
+.qr.wifi{max-width:260px}
+@media print{body.only-wifi .table-print,body.only-wifi h2{display:none!important} .qr{break-inside:avoid} .qr.wifi{width:95mm;max-width:none;font-size:14pt;padding:8mm} .qr.wifi svg{width:65mm;height:auto}}
 h2{font-size:19px;margin:16px 0 6px}
 @media print{header,nav.side,.noprint{display:none!important} body{background:#fff} .qr{border:1px dashed #999}}
 </style>
@@ -414,18 +417,35 @@ R.forecast = async () => {
       ${x.items.map(i => `<div class="row"><span class="grow">${esc(i.name)}</span><span>${i.qty}개</span></div>`).join('')}</div>`).join('')}</div>`;
 };
 
+// 와이파이 QR: 휴대폰 카메라로 찍으면 바로 연결 (WIFI:T:WPA;S:이름;P:비번;; · 특수문자는 \ 로 감쌈)
+const wifiText = (ssid, pw) => { const e = v => String(v).replace(/([\\;,:"])/g, '\\$1'); return `WIFI:T:${pw ? 'WPA' : 'nopass'};S:${e(ssid)};${pw ? `P:${e(pw)};` : ''};`; };
+function qrSvg(text, cell = 4) { qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8']; const q = qrcode(0, 'M'); q.addData(text); q.make(); return q.createSvgTag({cellSize: cell, margin: 2}); }
 R.qr = async () => {
   const s = await g('settings');
   const N = Math.max(1, Math.min(60, +s.tables || 10));
+  const wifiLine = s.wifi_ssid ? `<div class="wf">📶 ${esc(s.wifi_ssid)}${s.wifi_pw ? ` · 🔑 ${esc(s.wifi_pw)}` : ''}</div>` : '';
   setTimeout(async () => {
     if (!window.qrcode) await new Promise(ok => { const sc = document.createElement('script'); sc.src = '/qrcode.js'; sc.onload = ok; document.head.appendChild(sc); });
-    document.querySelectorAll('.qr .box').forEach(b => { const q = qrcode(0, 'M'); q.addData(location.origin + '/?t=' + encodeURIComponent(b.dataset.t)); q.make(); b.innerHTML = q.createSvgTag({cellSize: 4, margin: 2}); });
-    $('#pr').onclick = () => print();
+    document.querySelectorAll('.qr .box[data-t]').forEach(b => b.innerHTML = qrSvg(location.origin + '/?t=' + encodeURIComponent(b.dataset.t)));
+    const wb = $('#wbox'); if (wb && s.wifi_ssid) wb.innerHTML = qrSvg(wifiText(s.wifi_ssid, s.wifi_pw), 5);
+    $('#pr').onclick = () => { document.body.classList.remove('only-wifi'); print(); };
+    if ($('#prw')) $('#prw').onclick = () => { document.body.classList.add('only-wifi'); print(); setTimeout(() => document.body.classList.remove('only-wifi'), 500); };
+    $('#wsv').onclick = async () => {
+      try { await post('settings', {wifi_ssid: $('#wss').value.trim(), wifi_pw: $('#wpw').value, wifi_show: $('#wsh').checked ? '1' : '0'}); toast('저장했어요'); go('qr'); } catch (e) { toast(e.message); }
+    };
   });
-  return `<h2>테이블 QR 코드</h2><p class="muted noprint">인쇄해서 테이블에 붙이세요. 손님이 찍으면 그 테이블 번호로 메뉴판이 열려요. 테이블 수는 '설정'에서 바꿔요. (사이트 주소가 바뀌면 다시 인쇄)</p>
-    <button class="primary noprint" id="pr">🖨️ 인쇄</button>
-    <div class="qrs" style="margin-top:12px">${Array.from({length: N}, (_, i) => `<div class="qr"><b style="font-size:18px">🐻 ${esc(s.cafe_name)}</b><div class="box" data-t="${i + 1}"></div><b>${i + 1}번 테이블</b><div class="muted">찍고 바로 주문하세요</div></div>`).join('')}
-    <div class="qr"><b style="font-size:18px">🐻 ${esc(s.cafe_name)}</b><div class="box" data-t="포장"></div><b>포장 · 카운터</b><div class="muted">찍고 바로 주문하세요</div></div></div>`;
+  return `<h2>📶 와이파이 QR</h2><div class="card noprint">
+      <p class="muted" style="margin-top:0">손님이 휴대폰 카메라로 찍으면 비밀번호 없이 바로 와이파이에 연결돼요. 공유기 이름·비밀번호를 대소문자까지 똑같이 넣어 주세요.</p>
+      <div class="row wrapx"><div class="grow" style="min-width:140px"><label>와이파이 이름</label><input id="wss" value="${esc(s.wifi_ssid)}" placeholder="예: SANDBEAR_5G" autocomplete="off"></div>
+        <div class="grow" style="min-width:140px"><label>비밀번호 (없으면 비워두기)</label><input id="wpw" value="${esc(s.wifi_pw)}" autocomplete="off"></div></div>
+      <label class="row" style="margin-top:8px"><input type="checkbox" id="wsh" ${s.wifi_show !== '0' ? 'checked' : ''} style="width:auto"> 손님 메뉴판에도 와이파이 이름·비밀번호 보여주기</label>
+      <div class="row" style="margin-top:10px"><button class="primary" id="wsv">저장</button>${s.wifi_ssid ? '<button id="prw">🖨️ 와이파이 QR만 인쇄</button>' : ''}</div></div>
+    ${s.wifi_ssid ? `<div class="qrs wifi-print"><div class="qr wifi"><b style="font-size:20px">📶 FREE WiFi</b><div class="box" id="wbox"></div>
+      <div style="font-size:15px"><b>${esc(s.wifi_ssid)}</b></div>${s.wifi_pw ? `<div>비밀번호 <b>${esc(s.wifi_pw)}</b></div>` : ''}<div class="muted">카메라로 찍으면 바로 연결돼요</div></div></div>` : ''}
+    <h2>테이블 QR 코드</h2><p class="muted noprint">인쇄해서 테이블에 붙이세요. 손님이 찍으면 그 테이블 번호로 메뉴판이 열려요. 테이블 수는 '설정'에서 바꿔요. (사이트 주소가 바뀌면 다시 인쇄)${s.wifi_ssid ? ' 와이파이 정보도 카드 아래에 같이 찍혀요.' : ''}</p>
+    <button class="primary noprint" id="pr">🖨️ 전체 인쇄</button>
+    <div class="qrs table-print" style="margin-top:12px">${Array.from({length: N}, (_, i) => `<div class="qr"><b style="font-size:18px">🐻 ${esc(s.cafe_name)}</b><div class="box" data-t="${i + 1}"></div><b>${i + 1}번 테이블</b><div class="muted">찍고 바로 주문하세요</div>${wifiLine}</div>`).join('')}
+    <div class="qr"><b style="font-size:18px">🐻 ${esc(s.cafe_name)}</b><div class="box" data-t="포장"></div><b>포장 · 카운터</b><div class="muted">찍고 바로 주문하세요</div>${wifiLine}</div></div>`;
 };
 
 R.settings = async () => {

@@ -56,6 +56,7 @@
 .live{display:flex;align-items:center;gap:10px;margin-top:12px;padding:12px 14px;border-radius:14px;background:var(--card);border:1px solid var(--line);text-decoration:none;color:var(--ink);font-weight:700}
 .live.ready{background:var(--ok);border-color:var(--ok);color:#fff;animation:pulse 1.2s ease-in-out infinite}
 .live small{font-weight:400;color:inherit;opacity:.75}
+.wifi-line{display:flex;align-items:center;gap:8px;width:100%;margin-top:10px;padding:10px 14px;border-radius:14px;background:var(--card);border:1px solid var(--line);font-weight:500;text-align:left;font-size:14px}
 .notice{margin-top:12px;padding:10px 14px;border-radius:14px;background:#fff6e5;border:1px solid #f1dfb8;font-size:14px}
 </style>
 </head>
@@ -92,11 +93,13 @@ function drawMenu() {
     <div class="quick">
       <a class="resv-banner" href="/reserve"><b>케이크·디저트 예약</b><span>원하는 날 미리 예약하고<br>편하게 픽업하세요</span><em>예약하기 ›</em><i class="cake">🎂</i></a>
       <button class="pts-tile" id="btnMore"><i>🎁</i>포인트<span>${myOrders().length ? '내 주문 보기' : '조회하기'}</span></button>
-    </div></div>
+    </div>
+    ${M.wifi ? `<button class="wifi-line" id="wifi">📶 <span class="grow">와이파이 <b>${esc(M.wifi.ssid)}</b>${M.wifi.pw ? ` · 비번 <b>${esc(M.wifi.pw)}</b>` : ''}</span>${M.wifi.pw ? '<span class="muted" style="white-space:nowrap">복사</span>' : ''}</button>` : ''}</div>
     <nav class="cats">${M.cats.map(c => `<button data-c="${esc(c)}">${esc(c)}</button>`).join('')}</nav>
     ${M.cats.map(c => `<section class="sec" id="c-${esc(c)}"><h2>${esc(c)}</h2>${M.items.filter(i => i.cat === c).map(itemHtml).join('')}</section>`).join('')}
     <div class="bottom-space"></div>`;
   $('#btnMore').onclick = more;
+  if ($('#wifi') && M.wifi.pw) $('#wifi').onclick = () => (navigator.clipboard ? navigator.clipboard.writeText(M.wifi.pw) : Promise.reject()).then(() => toast('와이파이 비밀번호를 복사했어요')).catch(() => toast('비밀번호: ' + M.wifi.pw, 4000));
   liveOrder();
   app.querySelectorAll('.cats button').forEach(b => b.onclick = () => {
     const s = document.getElementById('c-' + b.dataset.c); window.scrollTo({top: s.offsetTop - 110, behavior: 'smooth'});

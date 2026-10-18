@@ -15,6 +15,7 @@
 .ord.alert h3::before{content:"🔔 새 주문 ";color:#c2453a}
 .newbar{display:none;position:sticky;top:56px;z-index:6;background:#c2453a;color:#fff;font-size:20px;font-weight:800;text-align:center;padding:12px;animation:flash2 .8s steps(1) infinite}
 .newbar.on{display:block}
+@media(max-width:700px){.hd .wrap{flex-wrap:wrap;height:auto;min-height:56px;padding-top:8px;padding-bottom:8px;row-gap:6px}#who{display:none}.newbar{font-size:16px;top:0}}
 @keyframes flash2{0%{background:#c2453a}50%{background:#e07b00}}
 .ord.making{border-color:var(--brand2)}
 .ord.ready{border-color:var(--ok);background:#f2faf4}
