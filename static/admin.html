@@ -40,6 +40,31 @@ main.body{flex:1;min-width:0;padding:4px 16px 40px}
 @media(max-width:700px){.grid2{grid-template-columns:1fr}}
 .lot{font-size:13px;padding:3px 0}
 .chk3 label{white-space:nowrap;margin:4px 0;color:var(--ink);font-size:14px}
+.pay-hd{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+.pay-hd div{background:var(--soft);border-radius:12px;padding:8px 10px;display:flex;flex-direction:column;gap:2px}
+.pay-hd b{font-size:17px} .pay-hd .tag{align-self:flex-start}
+@media(max-width:520px){.pay-hd{grid-template-columns:1fr 1fr}.pay-hd div:last-child{grid-column:1/-1}}
+.who button{background:#fff;border:1px solid var(--line);border-radius:99px;padding:6px 12px;font-weight:600;display:inline-flex;align-items:center;gap:6px}
+.who button i{width:10px;height:10px;border-radius:50%;background:var(--c)}
+.who button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.wcal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}
+.wcal .h{font-style:normal;text-align:center;font-size:12px;color:var(--sub);padding:2px 0}
+.wcal .sun{color:var(--bad)} .wcal .sat{color:#3c6fb6}
+.wcal button{min-width:0;min-height:74px;padding:4px 3px;border-radius:10px;background:#fff;border:1px solid var(--line);display:flex;flex-direction:column;align-items:stretch;gap:1px;text-align:left;font-weight:400;overflow:hidden}
+.wcal button > b{font-size:13px;color:inherit}
+.wcal button.today{box-shadow:inset 0 0 0 2px var(--brand2)}
+.wcal button.has{background:#fffaf2}
+.wcal .w{display:flex;align-items:center;gap:3px;font-size:11px;line-height:1.25;white-space:nowrap;overflow:hidden;color:var(--ink)}
+.wcal .w i{flex:none;width:7px;height:7px;border-radius:50%;background:var(--c)}
+.wcal .w em{font-style:normal;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:560px){.wcal button{min-height:58px}.wcal .w em{display:none}.wcal .w{font-size:10.5px}}
+.pay-cards{display:none}
+.pay-cards .pc{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:8px 0;background:#fff}
+.pay-cards .kv{display:flex;justify-content:space-between;padding:2px 0;font-size:14px}
+.pay-cards .kv.big{border-top:1px dashed var(--line);margin-top:4px;padding-top:6px;font-weight:800;font-size:16px;color:var(--brand)}
+.wcal .sw{display:none}
+@media(max-width:640px){.pay-cards{display:block}.pay-table{display:none}}
+@media(max-width:560px){.wcal .lw{display:none}.wcal .sw{display:inline}}
 .emo-pick{border:1px solid var(--line);border-radius:12px;padding:6px 8px;background:#fff;max-height:210px;overflow:auto}
 .emo-g{display:flex;flex-wrap:wrap;align-items:center;gap:2px;padding:3px 0}
 .emo-g span{width:100%;font-size:11px;color:var(--sub);margin-top:2px}
@@ -330,31 +355,99 @@ R.purchase = async () => {
     ${d.rows.length ? `<div class="row wrapx" style="margin-top:10px"><span class="muted" style="flex:1 0 auto">합계 약 ${won(d.rows.reduce((s, r) => s + r.cost, 0))}</span><button class="primary" id="cp">📋 발주 문자 복사</button></div>` : '<div class="empty">부족한 재료가 없어요 👍</div>'}</div>`;
 };
 
+// 출퇴근: 위에 달 고르기 → 💰 월급(정산 기간·월급날·주휴수당) → 📅 근무 캘린더 → 기록 목록
+const STAFF_COLORS = ['#8b5a2b', '#3f8f5a', '#3c6fb6', '#c2453a', '#b07a00', '#7b4fa6', '#2a8a8a', '#d0587e'];
+const hm = m => m % 60 ? `${Math.floor(m / 60)}시간 ${m % 60}분` : `${m / 60}시간`;
+const hshort = m => (Math.round(m / 6) / 10) + 'h';
+let attWho = 'all';
 R.attendance = async (month = today().slice(0, 7)) => {
-  const [d, st] = await Promise.all([g('attendance', '?month=' + month), g('staff')]); D.staff = st.rows; D.att = d.rows;
+  const [d, st, pay] = await Promise.all([g('attendance', '?month=' + month), g('staff'), g('payroll', '?period=' + month)]);
+  D.staff = st.rows; D.att = d.rows; D.attMonth = month;
+  const color = id => STAFF_COLORS[D.staff.findIndex(s => s.id == id) % STAFF_COLORS.length] || '#888';
+  const [y, m] = month.split('-').map(Number), shift = k => { const t = new Date(Date.UTC(y, m - 1 + k, 1)); return t.toISOString().slice(0, 7); };
+  const md = v => `${+v.slice(5, 7)}/${+v.slice(8)}`;
   setTimeout(() => {
-    $('#am').onchange = async e => { $('#pane').innerHTML = await R.attendance(e.target.value); bind(); };
+    const reload = async ym => { $('#pane').innerHTML = await R.attendance(ym); };
+    $('#amp').onclick = () => reload(shift(-1)); $('#amn').onclick = () => reload(shift(1));
     $('#aadd').onclick = () => attForm({}, month);
+    $('#pset').onclick = () => payForm(pay.conf, month);
     document.querySelectorAll('[data-att]').forEach(b => b.onclick = () => attForm(D.att.find(a => a.id == b.dataset.att), month));
+    document.querySelectorAll('[data-who]').forEach(b => b.onclick = () => { attWho = b.dataset.who; reload(month); });
+    document.querySelectorAll('.wcal [data-day]').forEach(b => b.onclick = () => dayRecords(b.dataset.day, month));
   });
-  const hm = m => `${Math.floor(m / 60)}시간 ${m % 60}분`;
-  return `<h2>출퇴근 관리</h2><p class="muted">직원은 매장 태블릿의 <b>/staff</b> 화면에서 본인 PIN 으로 출근·퇴근을 찍어요. 빠뜨린 기록은 여기서 고치면 돼요. 예상 급여 = 근무시간 × 시급 (주휴수당·세금 제외).</p>
+  // 근무 캘린더
+  const rows = D.att.filter(a => attWho === 'all' || a.staff_id == attWho);
+  const byDay = {}; rows.forEach(a => (byDay[a.clock_in.slice(0, 10)] = byDay[a.clock_in.slice(0, 10)] || []).push(a));
+  const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(), days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  let cells = '<span></span>'.repeat(first);
+  for (let dd = 1; dd <= days; dd++) {
+    const v = `${month}-${String(dd).padStart(2, '0')}`, list = byDay[v] || [], wd = (first + dd - 1) % 7;
+    const per = {}; list.forEach(a => { per[a.staff_id] = per[a.staff_id] || {name: a.name, mins: 0, open: false}; per[a.staff_id].mins += a.mins; if (!a.clock_out) per[a.staff_id].open = true; });
+    cells += `<button type="button" data-day="${v}" class="${v === today() ? 'today' : ''} ${wd === 0 ? 'sun' : wd === 6 ? 'sat' : ''} ${list.length ? 'has' : ''}"><b>${dd}</b>
+      ${Object.entries(per).map(([id, p]) => `<span class="w" style="--c:${color(id)}"><i></i><em>${esc(p.name)}</em> ${p.open ? '<span class="lw">근무중</span><span class="sw">⏱</span>' : hshort(p.mins)}</span>`).join('')}</button>`;
+  }
+  const monthMins = rows.reduce((t, a) => t + a.mins, 0);
+  const tax = pay.conf.tax;
+  return `<div class="row" style="margin-top:12px"><button id="amp" class="sm">‹</button><h2 style="margin:0">${y}년 ${m}월</h2><button id="amn" class="sm">›</button><span class="grow"></span><button class="primary sm" id="aadd">+ 기록 추가</button></div>
     ${d.working.length ? `<div class="card">🟢 지금 근무 중: ${d.working.map(w => `<b>${esc(w.name)}</b> (${w.clock_in.slice(11, 16)}~)`).join(', ')}</div>` : ''}
-    <div class="row noprint"><input type="month" id="am" value="${month}" style="max-width:200px"><button class="primary" id="aadd">+ 기록 추가</button></div>
-    <div class="card tbl"><b>${month} 합계</b><table><tr><th>직원</th><th class="r">근무일</th><th class="r">근무시간</th><th class="r">예상 급여</th></tr>
-    ${d.summary.map(s => `<tr><td>${esc(s.name)}</td><td class="r">${s.days}일</td><td class="r">${hm(s.mins)}</td><td class="r">${n(s.pay)}원</td></tr>`).join('') || '<tr><td colspan="4" class="muted">기록 없음</td></tr>'}</table></div>
-    <div class="card tbl"><table><tr><th>날짜</th><th>직원</th><th>출근</th><th>퇴근</th><th class="r">근무</th><th></th></tr>
-    ${d.rows.map(a => `<tr><td>${a.clock_in.slice(5, 10)}</td><td>${esc(a.name)}</td><td>${a.clock_in.slice(11, 16)}</td><td>${a.clock_out ? a.clock_out.slice(11, 16) + (a.clock_out.slice(0, 10) !== a.clock_in.slice(0, 10) ? ' (+1)' : '') : '<span class="tag ok">근무중</span>'}</td><td class="r">${a.clock_out ? hm(a.mins) : ''}</td><td><button class="sm" data-att="${a.id}">수정</button></td></tr>`).join('')}</table></div>`;
+
+    <div class="card pay"><div class="row wrapx"><b class="grow" style="font-size:16px">💰 월급</b><button class="sm" id="pset">⚙️ 월급날 · 계산 설정</button></div>
+      <div class="pay-hd"><div><span class="muted">정산 기간</span><b>${md(pay.start)} ~ ${md(pay.end)}</b></div>
+        <div><span class="muted">월급날</span><b>${+pay.payday.slice(5, 7)}월 ${+pay.payday.slice(8)}일</b><span class="tag ${pay.dday < 0 ? '' : pay.dday <= 3 ? 'bad' : 'warn'}">${pay.dday < 0 ? '지급일 지남' : pay.dday === 0 ? '오늘!' : 'D-' + pay.dday}</span></div>
+        <div><span class="muted">총 지급액</span><b>${won(tax ? pay.sum_net : pay.sum)}</b></div></div>
+      <div class="pay-cards">${pay.rows.map(r => `<div class="pc"><div class="row"><b class="grow" style="font-size:16px">${esc(r.name)}</b>${r.open ? `<span class="tag warn">퇴근 누락 ${r.open}</span>` : ''}</div>
+        <div class="muted">${r.days}일 · ${hm(r.mins)} · 시급 ${n(r.wage)}</div>
+        <div class="kv"><span>기본급</span><span>${n(r.base)}</span></div>${pay.conf.juhyu ? `<div class="kv"><span>주휴수당${r.juhyu_weeks ? ` (${r.juhyu_weeks}주)` : ''}</span><span>${n(r.juhyu)}</span></div>` : ''}
+        ${tax ? `<div class="kv"><span>합계</span><span>${n(r.total)}</span></div><div class="kv"><span>3.3% 공제</span><span>-${n(r.tax)}</span></div>` : ''}
+        <div class="kv big"><span>${tax ? '실지급' : '줄 돈'}</span><span>${won(tax ? r.net : r.total)}</span></div></div>`).join('') || '<div class="muted">이 기간 근무 기록이 없어요</div>'}</div>
+      <div class="tbl pay-table"><table><tr><th>직원</th><th class="r">근무</th><th class="r">시급</th><th class="r">기본급</th>${pay.conf.juhyu ? '<th class="r">주휴수당</th>' : ''}<th class="r">합계</th>${tax ? '<th class="r">3.3%</th><th class="r">실지급</th>' : ''}</tr>
+      ${pay.rows.map(r => `<tr><td><b>${esc(r.name)}</b>${r.open ? ` <span class="tag warn" title="퇴근 안 찍은 기록">퇴근 누락 ${r.open}</span>` : ''}</td>
+        <td class="r">${r.days}일 · ${hm(r.mins)}</td><td class="r">${n(r.wage)}</td><td class="r">${n(r.base)}</td>
+        ${pay.conf.juhyu ? `<td class="r">${n(r.juhyu)}${r.juhyu_weeks ? ` <span class="muted">(${r.juhyu_weeks}주)</span>` : ''}</td>` : ''}
+        <td class="r"><b>${n(r.total)}</b></td>${tax ? `<td class="r">-${n(r.tax)}</td><td class="r"><b>${n(r.net)}</b></td>` : ''}</tr>`).join('') || `<tr><td colspan="8" class="muted">이 기간 근무 기록이 없어요</td></tr>`}</table></div>
+      <div class="muted" style="font-size:12px;margin-top:6px">참고용 계산이에요. 기본급 = 근무시간 × 시급${pay.conf.juhyu ? ' · 주휴수당 = 한 주(월~일) 15시간 이상 일하면 (주 근무시간 ÷ 40) × 8시간 × 시급, 최대 8시간 (그 주에 빠진 날 없다고 가정)' : ''}. 휴게시간·야간/연장 가산(5인 이상 사업장)은 빠져 있어요. 퇴근 누락이 있으면 먼저 고쳐 주세요.</div></div>
+
+    <div class="card"><div class="row wrapx"><b class="grow" style="font-size:16px">📅 근무 캘린더</b><span class="muted">이번 달 ${hm(monthMins)}</span></div>
+      <div class="row wrapx who" style="margin:8px 0"><button data-who="all" class="${attWho === 'all' ? 'on' : ''}">전체</button>
+        ${D.staff.filter(s => s.active || D.att.some(a => a.staff_id == s.id)).map(s => `<button data-who="${s.id}" class="${attWho == s.id ? 'on' : ''}" style="--c:${color(s.id)}"><i></i>${esc(s.name)}</button>`).join('')}</div>
+      <div class="wcal">${'일월화수목금토'.split('').map((w, i) => `<i class="h ${i === 0 ? 'sun' : i === 6 ? 'sat' : ''}">${w}</i>`).join('')}${cells}</div>
+      <div class="muted" style="font-size:12px;margin-top:6px">날짜를 누르면 그날 기록을 보고 고치거나 추가할 수 있어요.</div></div>
+
+    <details class="card"><summary><b>📋 ${m}월 기록 목록 (${D.att.length}건)</b></summary><div class="tbl"><table><tr><th>날짜</th><th>직원</th><th>출근</th><th>퇴근</th><th class="r">근무</th><th></th></tr>
+    ${D.att.map(a => `<tr><td>${a.clock_in.slice(5, 10)}</td><td>${esc(a.name)}</td><td>${a.clock_in.slice(11, 16)}</td><td>${a.clock_out ? a.clock_out.slice(11, 16) + (a.clock_out.slice(0, 10) !== a.clock_in.slice(0, 10) ? ' (+1)' : '') : '<span class="tag ok">근무중</span>'}</td><td class="r">${a.clock_out ? hm(a.mins) : ''}</td><td><button class="sm" data-att="${a.id}">수정</button></td></tr>`).join('')}</table></div></details>`;
 };
+function dayRecords(day, month) {
+  const list = D.att.filter(a => a.clock_in.startsWith(day));
+  const md = modal(`<h3 style="margin-top:0">${+day.slice(5, 7)}월 ${+day.slice(8)}일 근무</h3>
+    ${list.map(a => `<div class="row al"><b class="grow">${esc(a.name)}</b><span>${a.clock_in.slice(11, 16)} ~ ${a.clock_out ? a.clock_out.slice(11, 16) : '근무중'}</span><span class="muted" style="width:72px;text-align:right">${a.clock_out ? hm(a.mins) : ''}</span><button class="sm" data-e="${a.id}">수정</button></div>`).join('') || '<div class="muted">기록이 없어요</div>'}
+    <button class="primary" id="dadd" style="width:100%;margin-top:12px">+ 이 날 기록 추가</button>`);
+  md.querySelectorAll('[data-e]').forEach(b => b.onclick = () => { md.remove(); attForm(D.att.find(a => a.id == b.dataset.e), month); });
+  $('#dadd', md).onclick = () => { md.remove(); attForm({clock_in: day + ' 10:00', clock_out: day + ' 16:00'}, month); };
+}
+function payForm(c, month) {
+  const md = modal(`<h3 style="margin-top:0">⚙️ 월급날 · 계산 설정</h3><div id="f">
+    <div class="row wrapx"><div class="grow"><label>정산 시작일 (매달)</label><select name="pay_start">${Array.from({length: 28}, (_, i) => `<option value="${i + 1}" ${c.start === i + 1 ? 'selected' : ''}>${i + 1}일${i === 0 ? ' (1일~말일)' : ` (${i + 1}일~다음 달 ${i}일)`}</option>`).join('')}</select></div>
+      <div class="grow"><label>월급날</label><select name="pay_day">${Array.from({length: 31}, (_, i) => `<option value="${i + 1}" ${c.day === i + 1 ? 'selected' : ''}>${i === 30 ? '말일' : (i + 1) + '일'}</option>`).join('')}</select></div></div>
+    <div class="muted" style="font-size:12px;margin-top:4px">월급날은 정산 기간이 끝난 뒤 처음 오는 그날이에요. 예) 1일~말일 정산 + 10일 → 10월 근무분을 11월 10일에.</div>
+    <label class="row" style="margin-top:10px;color:var(--ink)"><input type="checkbox" name="pay_juhyu" ${c.juhyu ? 'checked' : ''} style="width:auto"> 주휴수당 포함 (한 주 15시간 이상)</label>
+    <label class="row" style="color:var(--ink)"><input type="checkbox" name="pay_tax" ${c.tax ? 'checked' : ''} style="width:auto"> 3.3% 떼고 실지급액 보기 (사업소득 신고할 때)</label></div>
+    <button class="primary" id="sv" style="width:100%;margin-top:14px">저장</button>`);
+  $('#sv', md).onclick = async () => {
+    const f = form($('#f', md));
+    try { await post('settings', {pay_start: f.pay_start, pay_day: f.pay_day, pay_juhyu: f.pay_juhyu ? '1' : '0', pay_tax: f.pay_tax ? '1' : '0'}); md.remove(); toast('저장했어요'); $('#pane').innerHTML = await R.attendance(month); }
+    catch (e) { toast(e.message); }
+  };
+}
 function attForm(a, month) {
   const md = modal(`<h3 style="margin-top:0">${a.id ? '출퇴근 수정' : '출퇴근 기록 추가'}</h3><div id="f">
-    <label>직원</label><select name="staff_id">${D.staff.map(s => `<option value="${s.id}" ${s.id == a.staff_id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
+    <label>직원</label><select name="staff_id">${D.staff.map(s => `<option value="${s.id}" ${s.id == (a.staff_id || (attWho !== 'all' ? attWho : '')) ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
     <label>출근</label><input name="clock_in" type="datetime-local" value="${(a.clock_in || '').slice(0, 16).replace(' ', 'T')}">
     <label>퇴근 (비우면 근무중)</label><input name="clock_out" type="datetime-local" value="${(a.clock_out || '').slice(0, 16).replace(' ', 'T')}">
     <label>메모</label><input name="memo" value="${esc(a.memo || '')}"></div>
     <div class="row" style="margin-top:14px">${a.id ? '<button class="danger" id="del">삭제</button>' : ''}<span class="grow"></span><button class="primary" id="sv">저장</button></div>`);
-  $('#sv', md).onclick = async () => { try { await post('attendance_save', {id: a.id, ...form($('#f', md))}); md.remove(); go('attendance'); } catch (e) { toast(e.message); } };
-  if (a.id) $('#del', md).onclick = async () => { if (confirm('삭제할까요?')) { await post('attendance_delete', {id: a.id, month}); md.remove(); go('attendance'); } };
+  const back = async () => { md.remove(); $('#pane').innerHTML = await R.attendance(month); };
+  $('#sv', md).onclick = async () => { try { await post('attendance_save', {id: a.id, ...form($('#f', md))}); back(); toast('저장했어요'); } catch (e) { toast(e.message); } };
+  if (a.id) $('#del', md).onclick = async () => { if (confirm('삭제할까요?')) { await post('attendance_delete', {id: a.id, month}); back(); } };
 }
 
 R.staff = async () => {

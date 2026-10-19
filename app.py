@@ -568,6 +568,67 @@ def api_attendance(h, d):
     working = q("SELECT a.clock_in, s.name FROM attendance a JOIN staff s ON s.id=a.staff_id WHERE clock_out IS NULL")
     return 200, dict(month=month, rows=rows, summary=summary, working=working)
 
+# ---------------------------------------------------------------- 월급 (정산 기간 · 월급날 · 주휴수당)
+def pay_conf():
+    return dict(start=min(28, max(1, int(num(setting("pay_start", "1"), 1)))), day=min(31, max(1, int(num(setting("pay_day", "10"), 10)))),
+                juhyu=setting("pay_juhyu", "1") == "1", tax=setting("pay_tax", "0") == "1")
+
+def add_month(y, m, k=1):
+    m += k; return y + (m - 1) // 12, (m - 1) % 12 + 1
+
+def month_len(y, m):
+    y2, m2 = add_month(y, m); return (date(y2, m2, 1) - timedelta(days=1)).day
+
+def pay_period(ym, c):
+    """ym(정산 시작 달)의 정산 기간과 월급날: 시작일 1 → 1일~말일, 21 → 21일~다음 달 20일 · 월급날 = 기간이 끝난 뒤 처음 오는 그날"""
+    y, m = map(int, ym.split("-")); start = date(y, m, c["start"])
+    y2, m2 = add_month(y, m); end = date(y2, m2, c["start"]) - timedelta(days=1)
+    py, pm = end.year, end.month
+    while True:
+        pay = date(py, pm, min(c["day"], month_len(py, pm)))
+        if pay > end: return start, end, pay
+        py, pm = add_month(py, pm)
+
+def current_period_ym(c):
+    t = now().date(); y, m = t.year, t.month
+    if t.day < c["start"]: y, m = add_month(y, m, -1)
+    return f"{y}-{m:02d}"
+
+def att_mins(r):
+    if not r["clock_out"]: return 0
+    return max(0, int((datetime.strptime(r["clock_out"], "%Y-%m-%d %H:%M:%S") - datetime.strptime(r["clock_in"], "%Y-%m-%d %H:%M:%S")).total_seconds() // 60))
+
+def api_payroll(h, d):
+    """월급 계산: 기본급(근무시간×시급) + 주휴수당(한 주 15시간 이상이면 min(주 시간,40)/40×8×시급, 그 주 일요일이 들어간 정산 기간에)"""
+    c = pay_conf(); ym = d.get("period") or current_period_ym(c)
+    if not re.fullmatch(r"\d{4}-\d{2}", ym): ym = current_period_ym(c)
+    start, end, pay = pay_period(ym, c)
+    wk0 = start - timedelta(days=start.weekday()); wk1 = end + timedelta(days=6 - end.weekday())   # 걸친 주 전체 (월~일)
+    rows = q("SELECT a.*, s.name, s.wage, s.active FROM attendance a JOIN staff s ON s.id=a.staff_id WHERE substr(clock_in,1,10) BETWEEN ? AND ?",
+             wk0.isoformat(), wk1.isoformat())
+    per = {}
+    for r in rows:
+        day = date.fromisoformat(r["clock_in"][:10]); mins = att_mins(r)
+        p = per.setdefault(r["staff_id"], dict(id=r["staff_id"], name=r["name"], wage=r["wage"] or 0, mins=0, days=set(), weeks={}, open=0))
+        sun = day + timedelta(days=6 - day.weekday()); p["weeks"][sun] = p["weeks"].get(sun, 0) + mins
+        if start <= day <= end:
+            p["mins"] += mins; p["days"].add(day)
+            if not r["clock_out"]: p["open"] += 1
+    out = []
+    for p in per.values():
+        base = round(p["mins"] / 60 * p["wage"])
+        jw = [(s, m) for s, m in p["weeks"].items() if start <= s <= end and m >= 15 * 60] if c["juhyu"] else []
+        juhyu = round(sum(min(m, 40 * 60) / (40 * 60) * 8 * p["wage"] for _, m in jw))
+        total = base + juhyu
+        tax = (total * 33 // 1000) // 10 * 10 if c["tax"] else 0      # 3.3% (10원 미만 버림)
+        if p["mins"] or p["open"]:
+            out.append(dict(name=p["name"], wage=p["wage"], days=len(p["days"]), mins=p["mins"], base=base, juhyu=juhyu, juhyu_weeks=len(jw),
+                            total=total, tax=tax, net=total - tax, open=p["open"]))
+    out.sort(key=lambda r: -r["total"])
+    prev = "%d-%02d" % add_month(*map(int, ym.split("-")), -1); nxt = "%d-%02d" % add_month(*map(int, ym.split("-")), 1)
+    return 200, dict(period=ym, start=start.isoformat(), end=end.isoformat(), payday=pay.isoformat(), dday=(pay - now().date()).days,
+                     rows=out, conf=c, prev=prev, next=nxt, sum=sum(r["total"] for r in out), sum_net=sum(r["net"] for r in out))
+
 def api_forecast(h, d):
     """판매 예측: 최근 8주 같은 요일 판매량 평균 (최근 주일수록 가중치 ↑) — 데이터가 쌓일수록 정확해짐"""
     start = (now() - timedelta(days=56)).strftime("%Y-%m-%d")
@@ -619,6 +680,7 @@ def owner_get(h, d, sec):
         return 200, {"rows": q("SELECT r.*, m.name FROM reviews r LEFT JOIN menu m ON m.id=r.menu_id ORDER BY r.id DESC LIMIT 300"),
                      "avg": q("SELECT m.name, ROUND(AVG(r.rating),2) a, COUNT(*) n FROM reviews r JOIN menu m ON m.id=r.menu_id GROUP BY r.menu_id ORDER BY a DESC")}
     if sec == "forecast": return api_forecast(h, d)
+    if sec == "payroll": return api_payroll(h, d)
     if sec == "orders":
         day = d.get("day") or today()
         rows = q("SELECT * FROM orders WHERE substr(created,1,10)=? ORDER BY id DESC", day)
@@ -755,7 +817,7 @@ def owner_post(h, d, act):
         set_setting(k, ",".join(sorted(keep)))
         return 200, {"cal": resv_conf()}
     if act == "settings":
-        for k in ("wifi_ssid", "wifi_pw", "wifi_show", "cafe_name", "notice", "points_rate", "tables", "expiry_days", "resv_hours", "resv_min_days", "resv_closed", "resv_notice"):
+        for k in ("pay_start", "pay_day", "pay_juhyu", "pay_tax", "wifi_ssid", "wifi_pw", "wifi_show", "cafe_name", "notice", "points_rate", "tables", "expiry_days", "resv_hours", "resv_min_days", "resv_closed", "resv_notice"):
             if k in d: set_setting(k, str(d[k])[:300])
         if d.get("new_password"):
             if len(d["new_password"]) < 6: return 400, {"error": "비밀번호는 6자 이상"}
