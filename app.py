@@ -766,6 +766,14 @@ def owner_post(h, d, act):
     return 404, {"error": "없음"}
 
 # ---------------------------------------------------------------- HTTP
+def page(name):
+    """화면 파일 + css·js 주소 뒤에 ?v=수정시각 → 업데이트하면 폰·PC 가 예전 파일을 안 쓰고 바로 새로 받음"""
+    html = open(os.path.join(STATIC, name), encoding="utf-8").read()
+    for url, (f, _) in FILES.items():
+        v = int(os.path.getmtime(os.path.join(STATIC, f)))
+        html = html.replace(f'"{url}"', f'"{url}?v={v}"').replace(f"'{url}'", f"'{url}?v={v}'")
+    return html.encode()
+
 class H(BaseHTTPRequestHandler):
     server_version = "sandbear"
     def log_message(self, *a): pass
@@ -800,7 +808,7 @@ class H(BaseHTTPRequestHandler):
         u = urlparse(self.path); p = u.path.rstrip("/") or "/"; d = {k: v[0] for k, v in parse_qs(u.query).items()}
         try:
             if p in PAGES:
-                return self.send(200, open(os.path.join(STATIC, PAGES[p]), "rb").read(), "text/html; charset=utf-8")
+                return self.send(200, page(PAGES[p]), "text/html; charset=utf-8")
             if p in FILES:
                 f, ct = FILES[p]; return self.send(200, open(os.path.join(STATIC, f), "rb").read(), ct, "public, max-age=300")
             if p == "/api/menu": return self.send(*self.wrap(api_menu(self, d)))

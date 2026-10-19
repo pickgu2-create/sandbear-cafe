@@ -30,7 +30,7 @@ function unlockAudio() { try { _ac = _ac || new (window.AudioContext || window.w
 // 팝업: 바깥을 눌러도 안 닫힘 · 오른쪽 위 ✕ (PC 는 Esc) 로만 닫기
 function modal(html) {
   const m = document.createElement('div'); m.className = 'modal';
-  m.innerHTML = `<div class="sheet-box"><button type="button" class="x" aria-label="닫기">✕</button><div class="sheet">${html}</div></div>`;
+  m.innerHTML = `<div class="sheet-box"><button type="button" class="x" aria-label="닫기">✕ 닫기</button><div class="sheet">${html}</div></div>`;
   const esc = e => { if (e.key === 'Escape' && document.querySelector('.modal:last-of-type') === m) m.remove(); };
   const obs = new MutationObserver(() => { if (!m.isConnected) { document.removeEventListener('keydown', esc); obs.disconnect(); } });
   m.querySelector('.x').onclick = () => m.remove();
