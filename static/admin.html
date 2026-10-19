@@ -39,6 +39,7 @@ main.body{flex:1;min-width:0;padding:4px 16px 40px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media(max-width:700px){.grid2{grid-template-columns:1fr}}
 .lot{font-size:13px;padding:3px 0}
+.chk3 label{white-space:nowrap;margin:4px 0;color:var(--ink);font-size:14px}
 .emo-pick{border:1px solid var(--line);border-radius:12px;padding:6px 8px;background:#fff;max-height:210px;overflow:auto}
 .emo-g{display:flex;flex-wrap:wrap;align-items:center;gap:2px;padding:3px 0}
 .emo-g span{width:100%;font-size:11px;color:var(--sub);margin-top:2px}
@@ -182,7 +183,7 @@ function menuForm(m) {
     <textarea name="options" placeholder="온도*: HOT, ICE&#10;샷 추가: 1샷+500, 2샷+1000">${esc(m.options || '')}</textarea>
     <label>재고 방식</label><select name="track"><option value="recipe">음료 — 레시피 재료로 관리 (주문 때 재료 차감)</option><option value="count" ${m.stock !== null && m.stock !== undefined ? 'selected' : ''}>디저트 — 남은 개수로 관리 (생산일지에서 추가)</option></select>
     <label>남은 개수 (디저트일 때)</label><input name="stock" type="number" value="${m.stock ?? 0}">
-    <div class="row" style="margin-top:10px"><label class="row"><input type="checkbox" name="active" ${m.active === 0 ? '' : 'checked'} style="width:auto"> 메뉴판에 보이기</label>
+    <div class="row wrapx chk3" style="margin-top:10px;gap:4px 14px"><label class="row"><input type="checkbox" name="active" ${m.active === 0 ? '' : 'checked'} style="width:auto"> 메뉴판에 보이기</label>
     <label class="row"><input type="checkbox" name="soldout" ${m.soldout ? 'checked' : ''} style="width:auto"> 품절</label>
     <label class="row"><input type="checkbox" name="resv" ${m.resv ? 'checked' : ''} style="width:auto"> 🎂 예약 페이지에 보이기</label></div>
     <div class="muted">홀케이크처럼 예약으로만 파는 건 '메뉴판에 보이기'는 끄고 '예약 페이지에 보이기'만 켜세요.</div></div>
