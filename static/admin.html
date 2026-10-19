@@ -39,6 +39,11 @@ main.body{flex:1;min-width:0;padding:4px 16px 40px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media(max-width:700px){.grid2{grid-template-columns:1fr}}
 .lot{font-size:13px;padding:3px 0}
+.emo-pick{border:1px solid var(--line);border-radius:12px;padding:6px 8px;background:#fff;max-height:210px;overflow:auto}
+.emo-g{display:flex;flex-wrap:wrap;align-items:center;gap:2px;padding:3px 0}
+.emo-g span{width:100%;font-size:11px;color:var(--sub);margin-top:2px}
+.emo-pick button{width:38px;height:38px;padding:0;font-size:22px;background:none;border-radius:10px}
+.emo-pick button.on{background:var(--soft);box-shadow:inset 0 0 0 2px var(--brand)}
 .lot.expired{color:var(--bad);font-weight:700} .lot.soon{color:#9a6205;font-weight:700}
 .qrs{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
 .qr{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px;text-align:center;break-inside:avoid}
@@ -156,9 +161,19 @@ R.menu = async () => {
       <td class="r">${n(m.price)}</td><td>${m.stock === null ? '<span class="muted">레시피</span>' : n(m.stock) + '개'}</td>
       <td><input type="checkbox" data-so="${m.id}" ${m.soldout ? 'checked' : ''} style="width:22px;height:22px"></td><td><button class="sm primary" data-edit="${m.id}">이름·가격·옵션 수정</button></td></tr>`).join('')}</table></div>`;
 };
+// 메뉴 이모지 고르기 (카페·디저트)
+const EMOJI = [
+  ['빵·구움과자', '🥐 🥖 🍞 🥯 🥨 🧇 🥞 🍩 🍪 🥧 🧈 🥪'],
+  ['케이크·디저트', '🍰 🎂 🧁 🍮 🍨 🍦 🍧 🍫 🍬 🍭 🍡 🍯'],
+  ['커피·음료', '☕ 🍵 🫖 🧋 🥤 🧃 🥛 🍹 🧊 ❄️ 🔥 🌿'],
+  ['과일', '🍓 🍒 🍑 🥭 🍋 🍊 🍎 🍐 🍇 🫐 🍌 🥥 🍍 🥝 🌰 🥜'],
+  ['기타', '🐻 ⭐ ❤️ 🌸 🍀 🎁 ✨ 🆕'],
+];
 function menuForm(m) {
   const md = modal(`<h3 style="margin-top:0">${m.id ? '메뉴 수정' : '메뉴 추가'}</h3><div id="f">
-    <div class="row"><div class="grow"><label>분류</label><input name="cat" value="${esc(m.cat || '커피')}" list="cats"></div><div style="width:80px"><label>이모지</label><input name="emoji" value="${esc(m.emoji || '')}"></div></div>
+    <div class="row"><div class="grow"><label>분류</label><input name="cat" value="${esc(m.cat || '커피')}" list="cats"></div><div style="width:80px"><label>이모지</label><input name="emoji" id="emo" value="${esc(m.emoji || '')}" style="text-align:center;font-size:22px;padding:6px"></div></div>
+    <label>이모지 고르기 <span class="muted">(누르면 위에 들어가요 · 직접 써도 돼요)</span></label>
+    <div class="emo-pick">${EMOJI.map(([t, list]) => `<div class="emo-g"><span>${t}</span>${list.split(' ').map(e => `<button type="button" data-e="${e}" class="${e === m.emoji ? 'on' : ''}">${e}</button>`).join('')}</div>`).join('')}</div>
     <datalist id="cats">${[...new Set(D.menu.map(x => x.cat))].map(c => `<option>${esc(c)}`).join('')}</datalist>
     <label>메뉴 이름</label><input name="name" value="${esc(m.name || '')}">
     <div class="row"><div class="grow"><label>가격 (원)</label><input name="price" type="number" value="${m.price || ''}"></div><div class="grow"><label>정렬 순서</label><input name="sort" type="number" value="${m.sort || 0}"></div></div>
@@ -172,6 +187,9 @@ function menuForm(m) {
     <label class="row"><input type="checkbox" name="resv" ${m.resv ? 'checked' : ''} style="width:auto"> 🎂 예약 페이지에 보이기</label></div>
     <div class="muted">홀케이크처럼 예약으로만 파는 건 '메뉴판에 보이기'는 끄고 '예약 페이지에 보이기'만 켜세요.</div></div>
     <div class="row" style="margin-top:14px">${m.id ? '<button class="danger" id="del">삭제</button>' : ''}<span class="grow"></span><button class="primary" id="sv">저장</button></div>`);
+  md.querySelectorAll('.emo-pick button').forEach(b => b.onclick = () => {
+    $('#emo', md).value = b.dataset.e; md.querySelectorAll('.emo-pick button').forEach(x => x.classList.toggle('on', x === b));
+  });
   $('#sv', md).onclick = async () => { try { await post('menu_save', {id: m.id, ...form($('#f', md))}); md.remove(); go('menu'); toast('저장했어요'); } catch (e) { toast(e.message); } };
   if (m.id) $('#del', md).onclick = async () => { if (confirm('삭제할까요? (주문 기록이 있으면 숨김 처리)')) { await post('menu_delete', {id: m.id}); md.remove(); go('menu'); } };
 }
@@ -308,7 +326,7 @@ R.purchase = async () => {
   return `<h2>발주 목록 (자동)</h2><p class="muted">재고가 '최소 재고' 이하이거나 유통기한이 지난 재료가 자동으로 올라와요. 추천 수량 = 최소 재고의 2배까지 채우는 양.</p>
     <div class="card tbl"><table><tr><th>재료</th><th class="r">쓸 수 있는 재고</th><th class="r">최소</th><th class="r">추천 발주</th><th class="r">예상 금액</th><th>거래처</th></tr>
     ${d.rows.map(r => `<tr><td><b>${esc(r.name)}</b></td><td class="r">${n(r.qty)}${esc(r.unit)}</td><td class="r">${n(r.min_qty)}</td><td class="r"><b>${n(r.need)}${esc(r.unit)}</b></td><td class="r">${r.cost ? n(r.cost) : '-'}</td><td>${esc(r.supplier)}</td></tr>`).join('')}</table>
-    ${d.rows.length ? `<div class="row" style="margin-top:10px"><span class="grow muted">합계 약 ${won(d.rows.reduce((s, r) => s + r.cost, 0))}</span><button class="primary" id="cp">📋 발주 문자 복사</button></div>` : '<div class="empty">부족한 재료가 없어요 👍</div>'}</div>`;
+    ${d.rows.length ? `<div class="row wrapx" style="margin-top:10px"><span class="muted" style="flex:1 0 auto">합계 약 ${won(d.rows.reduce((s, r) => s + r.cost, 0))}</span><button class="primary" id="cp">📋 발주 문자 복사</button></div>` : '<div class="empty">부족한 재료가 없어요 👍</div>'}</div>`;
 };
 
 R.attendance = async (month = today().slice(0, 7)) => {
@@ -512,7 +530,7 @@ $('#lf').onsubmit = async e => {
   e.preventDefault();
   try { await api('/api/admin/login', {password: $('#pw').value}); $('#pw').value = ''; start(); } catch (er) { toast(er.message, 3500); }
 };
-$('#logout').onclick = async () => { await post('logout', {}); showLogin(); };
+$('#logout').onclick = async () => { await api('/api/logout', {}).catch(() => {}); toast('로그아웃했어요'); showLogin(); };
 async function start() {
   const me = await api('/api/me');
   if (me.role !== 'owner') return showLogin();

@@ -97,7 +97,7 @@ if (soundPref) {   // 전에 켜 두었으면: 화면 아무 데나 처음 누�
   $('#snd').textContent = '🔔 화면을 한 번 눌러 주세요';
   document.addEventListener('pointerdown', function once(e) { document.removeEventListener('pointerdown', once, true); if (e.target.id !== 'snd') { sound = true; unlockAudio(); drawSnd(); } }, true);
 }
-$('#out').onclick = async () => { await api('/api/staff/logout', {}); location.reload(); };
+$('#out').onclick = async () => { await api('/api/logout', {}).catch(() => {}); location.reload(); };
 // 확인 안 한 새 주문이 있는 동안 4초마다 계속 울림 → 결제 확인·제조 시작 등 버튼을 누르면 멈춤
 setInterval(() => { if (sound && data && data.orders.some(o => o.status === 'new' && !o.acked)) beep(4); }, 4000);
 me(); poll(); setInterval(poll, 3000); setInterval(draw, 30000);

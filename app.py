@@ -639,7 +639,7 @@ def num(v, default=0.0):
 def owner_post(h, d, act):
     i = int(d.get("id") or 0)
     if act == "logout":
-        h.set_cookie("sb_owner", "x", 0); return 200, {}
+        h.set_cookie("sb_owner", "x", 0); h.set_cookie("sb_staff", "x", 0); return 200, {}
     if act == "logout_all":
         set_setting("auth_ver", str(int(setting("auth_ver", "1")) + 1)); return 200, {}
     if act == "menu_save":
@@ -839,7 +839,8 @@ class H(BaseHTTPRequestHandler):
                    "/api/review": api_review, "/api/staff/login": api_staff_login, "/api/staff/clock": api_clock, "/api/admin/login": api_admin_login}
             if p in pub: return self.send(*self.wrap(pub[p](self, d)))
             role, sid = self.role()
-            if p == "/api/staff/logout": self.set_cookie("sb_staff", "x", 0); return self.send(200, {})
+            if p in ("/api/logout", "/api/staff/logout"):   # 로그아웃 = 직원·사장님 로그인 둘 다 풀기
+                self.set_cookie("sb_staff", "x", 0); self.set_cookie("sb_owner", "x", 0); return self.send(200, {})
             if p == "/api/kds/update":
                 return self.send(*self.wrap(api_kds_update(self, d))) if role else self.send(401, {"error": "로그인 필요"})
             if p == "/api/checklist/toggle":

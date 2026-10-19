@@ -27,11 +27,15 @@ function beep(times = 2) {
   } catch (e) {}
 }
 function unlockAudio() { try { _ac = _ac || new (window.AudioContext || window.webkitAudioContext)(); _ac.resume(); } catch (e) {} }
+// 팝업: 바깥을 눌러도 안 닫힘 · 오른쪽 위 ✕ (PC 는 Esc) 로만 닫기
 function modal(html) {
   const m = document.createElement('div'); m.className = 'modal';
-  m.innerHTML = `<div class="sheet">${html}</div>`;
-  m.addEventListener('click', e => { if (e.target === m) m.remove(); });
-  document.body.appendChild(m); return m;
+  m.innerHTML = `<div class="sheet-box"><button type="button" class="x" aria-label="닫기">✕</button><div class="sheet">${html}</div></div>`;
+  const esc = e => { if (e.key === 'Escape' && document.querySelector('.modal:last-of-type') === m) m.remove(); };
+  const obs = new MutationObserver(() => { if (!m.isConnected) { document.removeEventListener('keydown', esc); obs.disconnect(); } });
+  m.querySelector('.x').onclick = () => m.remove();
+  document.addEventListener('keydown', esc);
+  document.body.appendChild(m); obs.observe(document.body, {childList: true}); return m;
 }
 // 숫자 PIN 입력판
 function pinPad(el, len, onDone) {

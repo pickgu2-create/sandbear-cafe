@@ -301,7 +301,7 @@ async function adminSheet() {
         <a href="/staff"><button style="width:100%;padding:14px">⏰ 출퇴근 · 체크리스트</button></a></div>
       ${me.role === 'owner' ? '<a href="/admin"><button class="primary" style="width:100%;margin-top:8px;padding:14px">🔒 사장님 화면</button></a>' : ''}
       <div class="row" style="margin-top:12px"><span class="grow"></span><button class="sm ghost" id="lo">로그아웃</button></div>`;
-    $('#lo', box).onclick = async () => { await api(me.role === 'owner' ? '/api/admin/logout' : '/api/staff/logout', {}).catch(() => {}); me = {}; pin(); };
+    $('#lo', box).onclick = async () => { await api('/api/logout', {}).catch(() => {}); me = {}; toast('로그아웃했어요'); pin(); };
   };
   // 처음: PIN 입력판 (사장님은 아래 '비밀번호로 들어가기')
   const pin = () => {
